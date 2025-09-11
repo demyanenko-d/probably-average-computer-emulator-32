@@ -49,10 +49,10 @@ public:
         DS,
     };
 
-    uint8_t reg(Reg8 r) const {return reinterpret_cast<const uint8_t *>(regs)[((static_cast<int>(r) & 3) << 1) + (static_cast<int>(r) >> 2)];}
-    uint8_t &reg(Reg8 r) {return reinterpret_cast<uint8_t *>(regs)[((static_cast<int>(r) & 3) << 1) + (static_cast<int>(r) >> 2)];}
+    uint8_t reg(Reg8 r) const {return reinterpret_cast<const uint8_t *>(regs)[((static_cast<int>(r) & 3) << 2) + (static_cast<int>(r) >> 2)];}
+    uint8_t &reg(Reg8 r) {return reinterpret_cast<uint8_t *>(regs)[((static_cast<int>(r) & 3) << 2) + (static_cast<int>(r) >> 2)];}
     uint16_t reg(Reg16 r) const {return regs[static_cast<int>(r)];}
-    uint16_t &reg(Reg16 r) {return regs[static_cast<int>(r)];}
+    uint16_t &reg(Reg16 r) {return *reinterpret_cast<uint16_t *>(regs + static_cast<int>(r));}
 
     uint16_t getFlags() const {return flags;}
     void setFlags(uint16_t flags) {this->flags = flags;}
@@ -74,8 +74,8 @@ private:
     void writeRM16(uint8_t modRM, uint16_t v, int &cycles, uint32_t addr, bool rw = false);
 
     // ALU helpers
-    using ALUOp8 = uint8_t(*)(uint8_t, uint8_t, uint16_t &);
-    using ALUOp16 = uint16_t(*)(uint16_t, uint16_t, uint16_t &);
+    using ALUOp8 = uint8_t(*)(uint8_t, uint8_t, uint32_t &);
+    using ALUOp16 = uint16_t(*)(uint16_t, uint16_t, uint32_t &);
 
     template<ALUOp8 op, bool d, int regCycles, int memCycles>
     void doALU8(uint32_t addr);
@@ -95,8 +95,8 @@ private:
     int cyclesToRun = 0;
 
     // registers
-    uint16_t regs[13];
-    uint16_t flags;
+    uint32_t regs[13]; // segment regs are only 16-bit...
+    uint32_t flags;
 
     // enabling interrupts happens one opcode later
     bool delayInterrupt = false;

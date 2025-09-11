@@ -40,7 +40,7 @@ static constexpr int signBit()
 }
 
 template<class T>
-static T RAM_FUNC(doAdd)(T dest, T src, uint16_t &flags)
+static T RAM_FUNC(doAdd)(T dest, T src, uint32_t &flags)
 {
     T res = dest + src;
 
@@ -58,7 +58,7 @@ static T RAM_FUNC(doAdd)(T dest, T src, uint16_t &flags)
 }
 
 template<class T>
-static T RAM_FUNC(doAddWithCarry)(T dest, T src, uint16_t &flags)
+static T RAM_FUNC(doAddWithCarry)(T dest, T src, uint32_t &flags)
 {
     int c = flags & Flag_C ? 1 : 0;
     T res = dest + src + c;
@@ -78,7 +78,7 @@ static T RAM_FUNC(doAddWithCarry)(T dest, T src, uint16_t &flags)
 }
 
 template<class T>
-static T RAM_FUNC(doAnd)(T dest, T src, uint16_t &flags)
+static T RAM_FUNC(doAnd)(T dest, T src, uint32_t &flags)
 {
     T res = dest & src;
 
@@ -93,7 +93,7 @@ static T RAM_FUNC(doAnd)(T dest, T src, uint16_t &flags)
 }
 
 template<class T>
-static T RAM_FUNC(doDec)(T dest, uint16_t &flags)
+static T RAM_FUNC(doDec)(T dest, uint32_t &flags)
 {
     T res = dest - 1;
 
@@ -108,7 +108,7 @@ static T RAM_FUNC(doDec)(T dest, uint16_t &flags)
 }
 
 template<class T>
-static T RAM_FUNC(doInc)(T dest, uint16_t &flags)
+static T RAM_FUNC(doInc)(T dest, uint32_t &flags)
 {
     T res = dest + 1;
 
@@ -123,7 +123,7 @@ static T RAM_FUNC(doInc)(T dest, uint16_t &flags)
 }
 
 template<class T>
-static T RAM_FUNC(doOr)(T dest, T src, uint16_t &flags)
+static T RAM_FUNC(doOr)(T dest, T src, uint32_t &flags)
 {
     T res = dest | src;
 
@@ -138,7 +138,7 @@ static T RAM_FUNC(doOr)(T dest, T src, uint16_t &flags)
 }
 
 template<class T>
-static T RAM_FUNC(doRotateLeft)(T dest, int count, uint16_t &flags)
+static T RAM_FUNC(doRotateLeft)(T dest, int count, uint32_t &flags)
 {
     if(!count)
         return dest;
@@ -159,7 +159,7 @@ static T RAM_FUNC(doRotateLeft)(T dest, int count, uint16_t &flags)
 }
 
 template<class T>
-static T RAM_FUNC(doRotateLeftCarry)(T dest, int count, uint16_t &flags)
+static T RAM_FUNC(doRotateLeftCarry)(T dest, int count, uint32_t &flags)
 {
     if(!count)
         return dest;
@@ -200,7 +200,7 @@ static T RAM_FUNC(doRotateLeftCarry)(T dest, int count, uint16_t &flags)
 }
 
 template<class T>
-static T RAM_FUNC(doRotateRight)(T dest, int count, uint16_t &flags)
+static T RAM_FUNC(doRotateRight)(T dest, int count, uint32_t &flags)
 {
     if(!count)
         return dest;
@@ -221,7 +221,7 @@ static T RAM_FUNC(doRotateRight)(T dest, int count, uint16_t &flags)
 }
 
 template<class T>
-static T RAM_FUNC(doRotateRightCarry)(T dest, int count, uint16_t &flags)
+static T RAM_FUNC(doRotateRightCarry)(T dest, int count, uint32_t &flags)
 {
     if(!count)
         return dest;
@@ -263,7 +263,7 @@ static T RAM_FUNC(doRotateRightCarry)(T dest, int count, uint16_t &flags)
 }
 
 template<class T>
-static T RAM_FUNC(doShiftLeft)(T dest, int count, uint16_t &flags)
+static T RAM_FUNC(doShiftLeft)(T dest, int count, uint32_t &flags)
 {
     if(!count)
         return dest;
@@ -287,7 +287,7 @@ static T RAM_FUNC(doShiftLeft)(T dest, int count, uint16_t &flags)
 }
 
 template<class T>
-static T RAM_FUNC(doShiftRight)(T dest, int count, uint16_t &flags)
+static T RAM_FUNC(doShiftRight)(T dest, int count, uint32_t &flags)
 {
     if(!count)
         return dest;
@@ -311,7 +311,7 @@ static T RAM_FUNC(doShiftRight)(T dest, int count, uint16_t &flags)
 }
 
 template<class T>
-static T RAM_FUNC(doShiftRightArith)(T dest, int count, uint16_t &flags)
+static T RAM_FUNC(doShiftRightArith)(T dest, int count, uint32_t &flags)
 {
     if(!count)
         return dest;
@@ -338,7 +338,7 @@ static T RAM_FUNC(doShiftRightArith)(T dest, int count, uint16_t &flags)
 }
 
 template<class T>
-static T RAM_FUNC(doSub)(T dest, T src, uint16_t &flags)
+static T RAM_FUNC(doSub)(T dest, T src, uint32_t &flags)
 {
     T res = dest - src;
 
@@ -356,7 +356,7 @@ static T RAM_FUNC(doSub)(T dest, T src, uint16_t &flags)
 }
 
 template<class T>
-static T RAM_FUNC(doSubWithBorrow)(T dest, T src, uint16_t &flags)
+static T RAM_FUNC(doSubWithBorrow)(T dest, T src, uint32_t &flags)
 {
     int c = flags & Flag_C ? 1 : 0;
     T res = dest - src - c;
@@ -376,7 +376,7 @@ static T RAM_FUNC(doSubWithBorrow)(T dest, T src, uint16_t &flags)
 }
 
 template<class T>
-static T RAM_FUNC(doXor)(T dest, T src, uint16_t &flags)
+static T RAM_FUNC(doXor)(T dest, T src, uint32_t &flags)
 {
     T res = dest ^ src;
 
@@ -392,7 +392,7 @@ static T RAM_FUNC(doXor)(T dest, T src, uint16_t &flags)
 
 // higher level shift wrapper
 template<class T>
-static T RAM_FUNC(doShift)(int exOp, T dest, int count, uint16_t &flags)
+static T RAM_FUNC(doShift)(int exOp, T dest, int count, uint32_t &flags)
 {
     switch(exOp)
     {
