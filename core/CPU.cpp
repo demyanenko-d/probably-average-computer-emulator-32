@@ -2814,11 +2814,28 @@ uint16_t RAM_FUNC(CPU::readMem16)(uint16_t offset, uint32_t segment)
     return sys.readMem(offset + segment) | sys.readMem(((offset + 1) & 0xFFFF) + segment) << 8;
 }
 
+uint32_t RAM_FUNC(CPU::readMem32)(uint16_t offset, uint32_t segment)
+{
+    return sys.readMem(  offset +                segment)       |
+           sys.readMem(((offset + 1) & 0xFFFF) + segment) <<  8 |
+           sys.readMem(((offset + 2) & 0xFFFF) + segment) << 16 |
+           sys.readMem(((offset + 3) & 0xFFFF) + segment) << 24;
+}
+
 void RAM_FUNC(CPU::writeMem16)(uint16_t offset, uint32_t segment, uint16_t data)
 {
     sys.writeMem(offset + segment, data & 0xFF);
     sys.writeMem(((offset + 1) & 0xFFFF) + segment, data >> 8);
 }
+
+void RAM_FUNC(CPU::writeMem32)(uint16_t offset, uint32_t segment, uint32_t data)
+{
+    sys.writeMem(offset + segment, data & 0xFF);
+    sys.writeMem(((offset + 1) & 0xFFFF) + segment, data >> 8);
+    sys.writeMem(((offset + 2) & 0xFFFF) + segment, data >> 16);
+    sys.writeMem(((offset + 3) & 0xFFFF) + segment, data >> 24);
+}
+
 
 // rw is true if this is a write that was read in the same op (to avoid counting disp twice)
 // TODO: should addr cycles be counted twice?
@@ -2941,6 +2958,20 @@ uint16_t RAM_FUNC(CPU::readRM16)(uint8_t modRM, int &cycles, uint32_t addr)
         return reg(static_cast<Reg16>(rm));
 }
 
+uint32_t RAM_FUNC(CPU::readRM32)(uint8_t modRM, int &cycles, uint32_t addr)
+{
+    auto mod = modRM >> 6;
+    auto rm = modRM & 7;
+
+    if(mod != 3)
+    {
+        auto [offset, segment] = getEffectiveAddress(mod, rm, cycles, false, addr);
+        return readMem32(offset, segment);
+    }
+    else
+        return reg(static_cast<Reg32>(rm));
+}
+
 void RAM_FUNC(CPU::writeRM8)(uint8_t modRM, uint8_t v, int &cycles, uint32_t addr, bool rw)
 {
     auto mod = modRM >> 6;
@@ -2967,6 +2998,20 @@ void RAM_FUNC(CPU::writeRM16)(uint8_t modRM, uint16_t v, int &cycles, uint32_t a
     }
     else
         reg(static_cast<Reg16>(rm)) = v;
+}
+
+void RAM_FUNC(CPU::writeRM32)(uint8_t modRM, uint32_t v, int &cycles, uint32_t addr, bool rw)
+{
+    auto mod = modRM >> 6;
+    auto rm = modRM & 7;
+
+    if(mod != 3)
+    {
+        auto [offset, segment] = getEffectiveAddress(mod, rm, cycles, rw, addr);
+        writeMem16(offset, segment, v);
+    }
+    else
+        reg(static_cast<Reg32>(rm)) = v;
 }
 
 template <CPU::ALUOp8 op, bool d, int regCycles, int memCycles>

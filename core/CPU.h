@@ -89,7 +89,9 @@ public:
 
 private:
     uint16_t readMem16(uint16_t offset, uint32_t segment);
+    uint32_t readMem32(uint16_t offset, uint32_t segment);
     void writeMem16(uint16_t offset, uint32_t segment, uint16_t data);
+    void writeMem32(uint16_t offset, uint32_t segment, uint32_t data);
 
     std::tuple<uint16_t, uint32_t> getEffectiveAddress(int mod, int rm, int &cycles, bool rw, uint32_t addr);
 
@@ -97,9 +99,11 @@ private:
 
     uint8_t readRM8(uint8_t modRM, int &cycles, uint32_t addr);
     uint16_t readRM16(uint8_t modRM, int &cycles, uint32_t addr);
+    uint32_t readRM32(uint8_t modRM, int &cycles, uint32_t addr);
 
     void writeRM8(uint8_t modRM, uint8_t v, int &cycles, uint32_t addr, bool rw = false);
     void writeRM16(uint8_t modRM, uint16_t v, int &cycles, uint32_t addr, bool rw = false);
+    void writeRM32(uint8_t modRM, uint32_t v, int &cycles, uint32_t addr, bool rw = false);
 
     // ALU helpers
     using ALUOp8 = uint8_t(*)(uint8_t, uint8_t, uint32_t &);
