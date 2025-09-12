@@ -3625,7 +3625,7 @@ void RAM_FUNC(CPU::writeRM32)(uint8_t modRM, uint32_t v, int &cycles, uint32_t a
     if(mod != 3)
     {
         auto [offset, segment] = getEffectiveAddress(mod, rm, cycles, rw, addr);
-        writeMem16(offset, segment, v);
+        writeMem32(offset, segment, v);
     }
     else
         reg(static_cast<Reg32>(rm)) = v;
