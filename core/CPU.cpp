@@ -2122,7 +2122,6 @@ void RAM_FUNC(CPU::executeInstruction)()
             break;
         }
     
-        case 0xC0:
         case 0xC2: // RET near, add to SP
         {
             // pop from stack
@@ -2136,7 +2135,6 @@ void RAM_FUNC(CPU::executeInstruction)()
             cyclesExecuted(16 + 4);
             break;
         }
-        case 0xC1:
         case 0xC3: // RET near
         {
             // pop from stack
