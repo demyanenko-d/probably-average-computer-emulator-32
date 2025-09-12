@@ -122,16 +122,21 @@ private:
     // ALU helpers
     using ALUOp8 = uint8_t(*)(uint8_t, uint8_t, uint32_t &);
     using ALUOp16 = uint16_t(*)(uint16_t, uint16_t, uint32_t &);
+    using ALUOp32 = uint32_t(*)(uint32_t, uint32_t, uint32_t &);
 
     template<ALUOp8 op, bool d, int regCycles, int memCycles>
     void doALU8(uint32_t addr);
     template<ALUOp16 op, bool d, int regCycles, int memCycles>
     void doALU16(uint32_t addr);
+    template<ALUOp32 op, bool d, int regCycles, int memCycles>
+    void doALU32(uint32_t addr);
 
     template<ALUOp8 op>
     void doALU8AImm(uint32_t addr);
     template<ALUOp16 op>
     void doALU16AImm(uint32_t addr);
+    template<ALUOp32 op>
+    void doALU32AImm(uint32_t addr);
 
     void cyclesExecuted(int cycles);
 

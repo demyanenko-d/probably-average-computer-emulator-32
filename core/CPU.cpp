@@ -3494,6 +3494,37 @@ void CPU::doALU16(uint32_t addr)
     cyclesExecuted(cycles);
 }
 
+template <CPU::ALUOp32 op, bool d, int regCycles, int memCycles>
+void CPU::doALU32(uint32_t addr)
+{
+    auto modRM = sys.readMem(addr + 1);
+    auto r = static_cast<Reg32>((modRM >> 3) & 0x7);
+
+    int transfers = d ? 1 : 2;
+
+    int cycles = (modRM >> 6) == 3 ? regCycles : (memCycles + transfers * 4);
+
+    uint32_t src, dest;
+
+    if(d)
+    {
+        src = readRM32(modRM, cycles, addr);
+        dest = reg(r);
+
+        reg(r) = op(dest, src, flags);
+    }
+    else
+    {
+        src = reg(r);
+        dest = readRM32(modRM, cycles, addr);
+
+        writeRM32(modRM, op(dest, src, flags), cycles, addr, true);
+    }
+
+    reg(Reg32::EIP)++;
+    cyclesExecuted(cycles);
+}
+
 template <CPU::ALUOp8 op>
 void CPU::doALU8AImm(uint32_t addr)
 {
@@ -3513,6 +3544,17 @@ void CPU::doALU16AImm(uint32_t addr)
     reg(Reg16::AX) = op(reg(Reg16::AX), imm, flags);
 
     reg(Reg32::EIP) += 2;
+    cyclesExecuted(4);
+}
+
+template <CPU::ALUOp32 op>
+void CPU::doALU32AImm(uint32_t addr)
+{
+    uint32_t imm = sys.readMem(addr + 1) | sys.readMem(addr + 2) << 8 | sys.readMem(addr + 3) << 16 | sys.readMem(addr + 4) << 24;
+
+    reg(Reg32::EAX) = op(reg(Reg32::EAX), imm, flags);
+
+    reg(Reg32::EIP) += 4;
     cyclesExecuted(4);
 }
 
