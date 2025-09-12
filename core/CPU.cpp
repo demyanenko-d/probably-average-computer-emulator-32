@@ -1281,40 +1281,78 @@ void RAM_FUNC(CPU::executeInstruction)()
             auto exOp = (modRM >> 3) & 0x7;
 
             int cycles = (modRM >> 6) == 3 ? 4 : (exOp == 7/*CMP*/ ? 10 : 17) + 4; //?
-            auto dest = readRM16(modRM, cycles, addr);
-
             int immOff = 2 + getDispLen(modRM, addr + 2);
-            uint16_t imm = sys.readMem(addr + immOff) | sys.readMem(addr + immOff + 1) << 8;
 
-            switch(exOp)
+            if(operandSize32)
             {
-                case 0: // ADD
-                    writeRM16(modRM, doAdd(dest, imm, flags), cycles, addr, true);
-                    break;
-                case 1: // OR
-                    writeRM16(modRM, doOr(dest, imm, flags), cycles, addr, true);
-                    break;
-                case 2: // ADC
-                    writeRM16(modRM, doAddWithCarry(dest, imm, flags), cycles, addr, true);
-                    break;
-                case 3: // SBB
-                    writeRM16(modRM, doSubWithBorrow(dest, imm, flags), cycles, addr, true);
-                    break;
-                case 4: // AND
-                    writeRM16(modRM, doAnd(dest, imm, flags), cycles, addr, true);
-                    break;
-                case 5: // SUB
-                    writeRM16(modRM, doSub(dest, imm, flags), cycles, addr, true);
-                    break;
-                case 6: // XOR
-                    writeRM16(modRM, doXor(dest, imm, flags), cycles, addr, true);
-                    break;
-                case 7: // CMP
-                    doSub(dest, imm, flags);
-                    break;
-            }
-            reg(Reg32::EIP) += 3;
+                auto dest = readRM32(modRM, cycles, addr);
+                
+                uint32_t imm = sys.readMem(addr + immOff) | sys.readMem(addr + immOff + 1) << 8 | sys.readMem(addr + immOff + 2) << 16 | sys.readMem(addr + immOff + 3) << 24;
 
+                switch(exOp)
+                {
+                    case 0: // ADD
+                        writeRM32(modRM, doAdd(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 1: // OR
+                        writeRM32(modRM, doOr(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 2: // ADC
+                        writeRM32(modRM, doAddWithCarry(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 3: // SBB
+                        writeRM32(modRM, doSubWithBorrow(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 4: // AND
+                        writeRM32(modRM, doAnd(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 5: // SUB
+                        writeRM32(modRM, doSub(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 6: // XOR
+                        writeRM32(modRM, doXor(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 7: // CMP
+                        doSub(dest, imm, flags);
+                        break;
+                }
+                reg(Reg32::EIP) += 5;
+            }
+            else
+            {
+                auto dest = readRM16(modRM, cycles, addr);
+                
+                uint16_t imm = sys.readMem(addr + immOff) | sys.readMem(addr + immOff + 1) << 8;
+
+                switch(exOp)
+                {
+                    case 0: // ADD
+                        writeRM16(modRM, doAdd(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 1: // OR
+                        writeRM16(modRM, doOr(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 2: // ADC
+                        writeRM16(modRM, doAddWithCarry(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 3: // SBB
+                        writeRM16(modRM, doSubWithBorrow(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 4: // AND
+                        writeRM16(modRM, doAnd(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 5: // SUB
+                        writeRM16(modRM, doSub(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 6: // XOR
+                        writeRM16(modRM, doXor(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 7: // CMP
+                        doSub(dest, imm, flags);
+                        break;
+                }
+                reg(Reg32::EIP) += 3;
+            }
             cyclesExecuted(cycles);
             break;
         }
@@ -1325,41 +1363,84 @@ void RAM_FUNC(CPU::executeInstruction)()
             auto exOp = (modRM >> 3) & 0x7;
 
             int cycles = (modRM >> 6) == 3 ? 4 : (exOp == 7/*CMP*/ ? 10 : 17) + 4; //?
-            auto dest = readRM16(modRM, cycles, addr);
 
             int immOff = 2 + getDispLen(modRM, addr + 2);
-            uint16_t imm = sys.readMem(addr + immOff);
 
-            // sign extend
-            if(imm & 0x80)
-                imm |= 0xFF00;
-
-            switch(exOp)
+            if(operandSize32)
             {
-                case 0: // ADD
-                    writeRM16(modRM, doAdd(dest, imm, flags), cycles, addr, true);
-                    break;
-                case 1: // OR
-                    writeRM16(modRM, doOr(dest, imm, flags), cycles, addr, true);
-                    break;
-                case 2: // ADC
-                    writeRM16(modRM, doAddWithCarry(dest, imm, flags), cycles, addr, true);
-                    break;
-                case 3: // SBB
-                    writeRM16(modRM, doSubWithBorrow(dest, imm, flags), cycles, addr, true);
-                    break;
-                case 4: // AND
-                    writeRM16(modRM, doAnd(dest, imm, flags), cycles, addr, true);
-                    break;
-                case 5: // SUB
-                    writeRM16(modRM, doSub(dest, imm, flags), cycles, addr, true);
-                    break;
-                case 6: // XOR
-                    writeRM16(modRM, doXor(dest, imm, flags), cycles, addr, true);
-                    break;
-                case 7: // CMP
-                    doSub(dest, imm, flags);
-                    break;
+                auto dest = readRM32(modRM, cycles, addr);
+                
+                uint32_t imm = sys.readMem(addr + immOff);
+
+                // sign extend
+                if(imm & 0x80)
+                    imm |= 0xFFFFFF00;
+
+                switch(exOp)
+                {
+                    case 0: // ADD
+                        writeRM32(modRM, doAdd(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 1: // OR
+                        writeRM32(modRM, doOr(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 2: // ADC
+                        writeRM32(modRM, doAddWithCarry(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 3: // SBB
+                        writeRM32(modRM, doSubWithBorrow(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 4: // AND
+                        writeRM32(modRM, doAnd(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 5: // SUB
+                        writeRM32(modRM, doSub(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 6: // XOR
+                        writeRM32(modRM, doXor(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 7: // CMP
+                        doSub(dest, imm, flags);
+                        break;
+                }
+            }
+            else
+            {
+                auto dest = readRM16(modRM, cycles, addr);
+
+                uint16_t imm = sys.readMem(addr + immOff);
+
+                // sign extend
+                if(imm & 0x80)
+                    imm |= 0xFF00;
+
+                switch(exOp)
+                {
+                    case 0: // ADD
+                        writeRM16(modRM, doAdd(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 1: // OR
+                        writeRM16(modRM, doOr(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 2: // ADC
+                        writeRM16(modRM, doAddWithCarry(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 3: // SBB
+                        writeRM16(modRM, doSubWithBorrow(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 4: // AND
+                        writeRM16(modRM, doAnd(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 5: // SUB
+                        writeRM16(modRM, doSub(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 6: // XOR
+                        writeRM16(modRM, doXor(dest, imm, flags), cycles, addr, true);
+                        break;
+                    case 7: // CMP
+                        doSub(dest, imm, flags);
+                        break;
+                }
             }
 
             reg(Reg32::EIP) += 2;
