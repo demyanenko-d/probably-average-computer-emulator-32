@@ -470,7 +470,7 @@ void RAM_FUNC(CPU::run)(int ms)
 
 void RAM_FUNC(CPU::executeInstruction)()
 {
-    auto addr = (getSegmentOffset(Reg16::CS)) + (reg(Reg16::IP)++);
+    auto addr = getSegmentOffset(Reg16::CS) + (reg(Reg32::EIP)++);
 
     auto opcode = sys.readMem(addr);
     bool rep = false, repZ = true;
