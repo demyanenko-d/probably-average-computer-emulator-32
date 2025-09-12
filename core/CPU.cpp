@@ -2331,9 +2331,17 @@ void RAM_FUNC(CPU::executeInstruction)()
             auto count = 1;
     
             int cycles = (modRM >> 6) == 3 ? 2 : 15 + 2 * 4;
-            auto v = readRM16(modRM, cycles, addr);
 
-            writeRM16(modRM, doShift(exOp, v, count, flags), cycles, addr, true);
+            if(operandSize32)
+            {
+                auto v = readRM32(modRM, cycles, addr);
+                writeRM32(modRM, doShift(exOp, v, count, flags), cycles, addr, true);
+            }
+            else
+            {
+                auto v = readRM16(modRM, cycles, addr);
+                writeRM16(modRM, doShift(exOp, v, count, flags), cycles, addr, true);
+            }
 
             reg(Reg32::EIP)++;
             cyclesExecuted(cycles);
@@ -2363,9 +2371,17 @@ void RAM_FUNC(CPU::executeInstruction)()
             auto count = reg(Reg8::CL);
     
             int cycles = ((modRM >> 6) == 3 ? 8 : 20 + 2 * 4) + count * 4;
-            auto v = readRM16(modRM, cycles, addr);
 
-            writeRM16(modRM, doShift(exOp, v, count, flags), cycles, addr, true);
+            if(operandSize32)
+            {
+                auto v = readRM32(modRM, cycles, addr);
+                writeRM32(modRM, doShift(exOp, v, count, flags), cycles, addr, true);
+            }
+            else
+            {
+                auto v = readRM16(modRM, cycles, addr);
+                writeRM16(modRM, doShift(exOp, v, count, flags), cycles, addr, true);
+            }
 
             reg(Reg32::EIP)++;
             cyclesExecuted(cycles);
