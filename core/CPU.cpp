@@ -1153,8 +1153,16 @@ void RAM_FUNC(CPU::executeInstruction)()
         case 0x46:
         case 0x47:
         {
-            auto destReg = static_cast<Reg16>(opcode & 7);
-            reg(destReg) = doInc(reg(destReg), flags);
+            if(operandSize32)
+            {
+                auto destReg = static_cast<Reg32>(opcode & 7);
+                reg(destReg) = doInc(reg(destReg), flags);
+            }
+            else
+            {
+                auto destReg = static_cast<Reg16>(opcode & 7);
+                reg(destReg) = doInc(reg(destReg), flags);
+            }
             cyclesExecuted(3);
             break;
         }
@@ -1168,8 +1176,16 @@ void RAM_FUNC(CPU::executeInstruction)()
         case 0x4E:
         case 0x4F:
         {
-            auto destReg = static_cast<Reg16>(opcode & 7);
-            reg(destReg) = doDec(reg(destReg), flags);
+            if(operandSize32)
+            {
+                auto destReg = static_cast<Reg32>(opcode & 7);
+                reg(destReg) = doDec(reg(destReg), flags);
+            }
+            else
+            {
+                auto destReg = static_cast<Reg16>(opcode & 7);
+                reg(destReg) = doDec(reg(destReg), flags);
+            }
             cyclesExecuted(3);
             break;
         }
