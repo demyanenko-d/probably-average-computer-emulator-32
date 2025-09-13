@@ -1763,11 +1763,21 @@ void RAM_FUNC(CPU::executeInstruction)()
             auto r = (modRM >> 3) & 0x7;
 
             int cycles = (modRM >> 6) == 3 ? 3 : 9 + 4;
-    
-            auto src = reg(static_cast<Reg16>(r));
-            auto dest = readRM16(modRM, cycles, addr);
 
-            doAnd(dest, src, flags);
+            if(operandSize32)
+            {
+                auto src = reg(static_cast<Reg32>(r));
+                auto dest = readRM32(modRM, cycles, addr);
+
+                doAnd(dest, src, flags);
+            }
+            else
+            {
+                auto src = reg(static_cast<Reg16>(r));
+                auto dest = readRM16(modRM, cycles, addr);
+
+                doAnd(dest, src, flags);
+            }
 
             reg(Reg32::EIP)++;
             cyclesExecuted(cycles);
@@ -2431,11 +2441,18 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0xA9: // TEST AX imm16
         {
-            uint16_t imm = sys.readMem(addr + 1) | sys.readMem(addr + 2) << 8;
-
-            doAnd(reg(Reg16::AX), imm, flags);
-
-            reg(Reg32::EIP) += 2;
+            if(operandSize32)
+            {
+                uint32_t imm = sys.readMem(addr + 1) | sys.readMem(addr + 2) << 8 | sys.readMem(addr + 3) << 16 | sys.readMem(addr + 4) << 24;
+                doAnd(reg(Reg32::EAX), imm, flags);
+                reg(Reg32::EIP) += 4;
+            }
+            else
+            {
+                uint16_t imm = sys.readMem(addr + 1) | sys.readMem(addr + 2) << 8;
+                doAnd(reg(Reg16::AX), imm, flags);
+                reg(Reg32::EIP) += 2;
+            }
             cyclesExecuted(4);
             break;
         }
