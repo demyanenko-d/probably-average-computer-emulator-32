@@ -23,6 +23,115 @@ public:
     virtual void dmaComplete(int ch) = 0;
 };
 
+class Chipset final : public IODevice
+{
+public:
+    using SpeakerAudioCallback = void(*)(int8_t sample);
+
+    Chipset(System &sys);
+
+    uint8_t read(uint16_t addr) override;
+    void write(uint16_t addr, uint8_t data) override;
+
+    void updateForInterrupts(uint8_t mask) override;
+    int getCyclesToNextInterrupt(uint32_t cycleCount) override;
+
+    uint8_t dmaRead(int ch) override {return 0xFF;}
+    void dmaWrite(int ch, uint8_t data) override;
+    void dmaComplete(int ch) override {}
+
+    void updateForDisplay();
+
+    // DMA
+    void dmaRequest(int ch, bool active, IODevice *dev = nullptr);
+    void updateDMA();
+    bool needDMAUpdate() const {return dma.request & ~dma.mask;}
+
+    // PIC access/helpers
+    bool hasInterrupt() const {return pic.request & ~pic.mask;}
+    uint8_t getPICMask() const {return pic.mask;}
+
+    void flagPICInterrupt(int index);
+    uint8_t acknowledgeInterrupt();
+
+    // PIT/speaker
+    void setSpeakerAudioCallback(SpeakerAudioCallback cb);
+
+private:
+    struct DMA
+    {
+        uint16_t baseAddress[4];
+        uint16_t baseWordCount[4];
+        uint16_t currentAddress[4];
+        uint16_t currentWordCount[4];
+
+        uint16_t tempAddress;
+        uint16_t tempWordCount;
+        uint8_t tempData;
+
+        uint8_t status;
+        uint8_t command;
+        uint8_t request;
+
+        uint8_t mode[4];
+
+        uint8_t mask = 0xF;
+
+        bool flipFlop = false;
+
+        uint8_t highAddr[4];
+
+        IODevice *requestedDev[4];
+    };
+
+    struct PIC
+    {
+        uint8_t initCommand[4];
+        int nextInit = 0;
+
+        uint8_t request = 0;
+        uint8_t service = 0;
+        uint8_t mask = 0;
+
+        uint8_t statusRead = 0;
+    };
+
+    struct PIT
+    {
+        uint8_t control[3]{0, 0, 0};
+        uint8_t active = 0;
+
+        uint16_t counter[3];
+        uint16_t reload[3];
+        uint16_t latch[3];
+
+        uint8_t latched = 0;
+        uint8_t highByte = 0; // lo/hi access mode
+
+        uint8_t outState = 0;
+        uint8_t reloadNextCycle = 0;
+
+        uint32_t lastUpdateCycle = 0;
+        uint32_t nextUpdateCycle = 0;
+    };
+
+    void updatePIT();
+    void calculateNextPITUpdate();
+    void updateSpeaker(uint32_t target);
+
+    System &sys;
+
+    DMA dma;
+
+    PIC pic;
+
+    PIT pit;
+
+    uint32_t lastSpeakerUpdateCycle = 0;
+    uint32_t speakerSampleTimer = 0;
+    SpeakerAudioCallback speakerCb = nullptr;
+};
+
 class System
 {
 public:
@@ -108,6 +217,8 @@ private:
     uint8_t *memMap[maxAddress / blockSize];
 
     MemRequestCallback memReqCb = nullptr;
+
+    Chipset chipset;
 
     std::vector<IORange> ioDevices;
 
