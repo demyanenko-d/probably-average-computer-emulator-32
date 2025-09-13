@@ -360,7 +360,25 @@ void Chipset::write(uint16_t addr, uint8_t data)
 
             if(channel == 3) // readback
             {
-                printf("PIT readback!\n");
+                int chans = (data >> 1) & 7;
+                bool latchStatus = !(data & (1 << 4));
+                bool latchCount = !(data & (1 << 5));
+
+                if(latchCount)
+                {
+                    for(int i = 0; i < 3; i++)
+                    {
+                        if(chans & (1 << i))
+                        {
+                            pit.latch[i] = pit.counter[0];
+                            pit.latched |= (1 << i);
+                        }
+                    }
+                }
+                else if(latchStatus)
+                {
+                    printf("PIT readback status!\n");
+                }
                 return;
             }
 
