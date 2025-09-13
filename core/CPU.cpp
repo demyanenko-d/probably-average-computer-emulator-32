@@ -338,6 +338,33 @@ static T RAM_FUNC(doShiftRightArith)(T dest, int count, uint32_t &flags)
 }
 
 template<class T>
+static T RAM_FUNC(doDoubleShiftRight)(T dest, T src, int count, uint32_t &flags)
+{
+    if(!count)
+        return dest;
+
+    int maxBits = sizeof(T) * 8;
+
+    bool carry = count > maxBits ? 0 : dest & (1 << (count - 1));
+
+    T res = count >= maxBits ? 0 : dest >> count;
+
+    // shift in from src
+    res |= src << (maxBits - count);
+
+    flags = (flags & ~(Flag_C | Flag_P | Flag_Z | Flag_S))
+          | (carry ? Flag_C : 0)
+          | (parity(res) ? Flag_P : 0)
+          | (res == 0 ? Flag_Z : 0)
+          | (res & signBit<T>() ? Flag_S : 0);
+
+    // "undefined" for shift counts other than 1
+    flags = (flags & ~Flag_O) | (((res & (signBit<T>() >> 1)) != (res & signBit<T>())) ? Flag_O : 0);
+
+    return res;
+}
+
+template<class T>
 static T RAM_FUNC(doSub)(T dest, T src, uint32_t &flags)
 {
     T res = dest - src;
@@ -851,6 +878,57 @@ void RAM_FUNC(CPU::executeInstruction)()
                     auto modRM = sys.readMem(addr + 2);
                     int cycles;
                     writeRM8(modRM, getCondValue(cond) ? 1 : 0, cycles, addr + 1);
+
+                    reg(Reg32::EIP) += 2;
+                    break;
+                }
+
+                case 0xAC: // SHRD by imm
+                {
+                    auto modRM = sys.readMem(addr + 2);
+                    auto r = (modRM >> 3) & 0x7;
+
+                    auto count = sys.readMem(addr + 3 + getDispLen(modRM, addr + 3));
+
+                    int cycles;
+ 
+                    if(operandSize32)
+                    {
+                        auto v = readRM32(modRM, cycles, addr);
+                        auto src = reg(static_cast<Reg32>(r));
+                        writeRM32(modRM, doDoubleShiftRight(v, src, count, flags), cycles, addr, true);
+                    }
+                    else
+                    {
+                        auto v = readRM16(modRM, cycles, addr);
+                        auto src = reg(static_cast<Reg16>(r));
+                        writeRM16(modRM, doDoubleShiftRight(v, src, count, flags), cycles, addr, true);
+                    }
+
+                    reg(Reg32::EIP) += 3;
+                    break;
+                }
+                case 0xAD: // SHRD by CL
+                {
+                    auto modRM = sys.readMem(addr + 2);
+                    auto r = (modRM >> 3) & 0x7;
+
+                    auto count = reg(Reg8::CL);
+
+                    int cycles;
+
+                    if(operandSize32)
+                    {
+                        auto v = readRM32(modRM, cycles, addr);
+                        auto src = reg(static_cast<Reg32>(r));
+                        writeRM32(modRM, doDoubleShiftRight(v, src, count, flags), cycles, addr, true);
+                    }
+                    else
+                    {
+                        auto v = readRM16(modRM, cycles, addr);
+                        auto src = reg(static_cast<Reg16>(r));
+                        writeRM16(modRM, doDoubleShiftRight(v, src, count, flags), cycles, addr, true);
+                    }
 
                     reg(Reg32::EIP) += 2;
                     break;
