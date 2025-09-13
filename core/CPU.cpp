@@ -856,6 +856,40 @@ void RAM_FUNC(CPU::executeInstruction)()
                     break;
                 }
 
+                case 0xAF: // IMUL r, r/m
+                {
+                    auto modRM = sys.readMem(addr + 1);
+                    auto r = (modRM >> 3) & 0x7;
+        
+                    int cycles;
+
+                    if(operandSize32)
+                    {
+                        int64_t res = static_cast<int32_t>(readRM32(modRM, cycles, addr)) * static_cast<int32_t>(reg(static_cast<Reg32>(r)));
+                        reg(static_cast<Reg32>(r)) = res;
+
+                        // check if upper half matches lower half's sign
+                        if(res >> 32 != (res & 0x80000000 ? -1 : 0))
+                            flags |= Flag_C | Flag_O;
+                        else
+                            flags &= ~(Flag_C | Flag_O);
+                    }
+                    else
+                    {
+                        int32_t res = static_cast<int16_t>(readRM16(modRM, cycles, addr)) * static_cast<int16_t>(reg(static_cast<Reg16>(r)));
+                        reg(static_cast<Reg16>(r)) = res;
+
+                        // check if upper half matches lower half's sign
+                        if(res >> 16 != (res & 0x8000 ? -1 : 0))
+                            flags |= Flag_C | Flag_O;
+                        else
+                            flags &= ~(Flag_C | Flag_O);
+                    }
+
+                    reg(Reg32::EIP) += 2;
+                    break;
+                }
+
                 case 0xB6: // MOVZX 8 -> 16/32
                 {
                     auto modRM = sys.readMem(addr + 2);
@@ -1299,6 +1333,83 @@ void RAM_FUNC(CPU::executeInstruction)()
             }
 
             push(imm, operandSize32);
+            break;
+        }
+
+        case 0x69: // IMUL imm
+        {
+            auto modRM = sys.readMem(addr + 1);
+            auto r = (modRM >> 3) & 0x7;
+   
+            int cycles;
+            auto immAddr = addr + 2 + getDispLen(modRM, addr + 2);
+
+            if(operandSize32)
+            {
+                auto imm = static_cast<int32_t>(sys.readMem(immAddr) | sys.readMem(immAddr + 1) << 8 | sys.readMem(immAddr + 2) << 16 | sys.readMem(immAddr + 3) << 24);
+
+                int64_t res = static_cast<int32_t>(readRM32(modRM, cycles, addr)) * imm;
+                reg(static_cast<Reg32>(r)) = res;
+
+                // check if upper half matches lower half's sign
+                if(res >> 32 != (res & 0x80000000 ? -1 : 0))
+                    flags |= Flag_C | Flag_O;
+                else
+                    flags &= ~(Flag_C | Flag_O);
+
+                reg(Reg32::EIP) += 5;
+            }
+            else
+            {
+                auto imm = static_cast<int16_t>(sys.readMem(immAddr) | sys.readMem(immAddr + 1) << 8);
+
+                int32_t res = static_cast<int16_t>(readRM16(modRM, cycles, addr)) * imm;
+                reg(static_cast<Reg16>(r)) = res;
+
+                // check if upper half matches lower half's sign
+                if(res >> 16 != (res & 0x8000 ? -1 : 0))
+                    flags |= Flag_C | Flag_O;
+                else
+                    flags &= ~(Flag_C | Flag_O);
+
+                reg(Reg32::EIP) += 3;
+            }
+
+            break;
+        }
+
+        case 0x6B: // IMUL sign extended byte
+        {
+            auto modRM = sys.readMem(addr + 1);
+            auto r = (modRM >> 3) & 0x7;
+            int8_t imm = sys.readMem(addr + 2 + getDispLen(modRM, addr + 2));
+
+            int cycles;
+
+            if(operandSize32)
+            {
+                int64_t res = static_cast<int32_t>(readRM32(modRM, cycles, addr)) * imm;
+                reg(static_cast<Reg32>(r)) = res;
+
+                // check if upper half matches lower half's sign
+                if(res >> 32 != (res & 0x80000000 ? -1 : 0))
+                    flags |= Flag_C | Flag_O;
+                else
+                    flags &= ~(Flag_C | Flag_O);
+            }
+            else
+            {
+                int32_t res = static_cast<int16_t>(readRM16(modRM, cycles, addr)) * imm;
+                reg(static_cast<Reg16>(r)) = res;
+
+                // check if upper half matches lower half's sign
+                if(res >> 16 != (res & 0x8000 ? -1 : 0))
+                    flags |= Flag_C | Flag_O;
+                else
+                    flags &= ~(Flag_C | Flag_O);
+            }
+
+            reg(Reg32::EIP) += 2;
             break;
         }
 
