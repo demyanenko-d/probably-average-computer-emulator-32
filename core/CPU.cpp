@@ -894,15 +894,15 @@ void RAM_FUNC(CPU::executeInstruction)()
  
                     if(operandSize32)
                     {
-                        auto v = readRM32(modRM, cycles, addr);
+                        auto v = readRM32(modRM, cycles, addr + 1);
                         auto src = reg(static_cast<Reg32>(r));
-                        writeRM32(modRM, doDoubleShiftRight(v, src, count, flags), cycles, addr, true);
+                        writeRM32(modRM, doDoubleShiftRight(v, src, count, flags), cycles, addr + 1, true);
                     }
                     else
                     {
-                        auto v = readRM16(modRM, cycles, addr);
+                        auto v = readRM16(modRM, cycles, addr + 1);
                         auto src = reg(static_cast<Reg16>(r));
-                        writeRM16(modRM, doDoubleShiftRight(v, src, count, flags), cycles, addr, true);
+                        writeRM16(modRM, doDoubleShiftRight(v, src, count, flags), cycles, addr + 1, true);
                     }
 
                     reg(Reg32::EIP) += 3;
@@ -919,15 +919,15 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                     if(operandSize32)
                     {
-                        auto v = readRM32(modRM, cycles, addr);
+                        auto v = readRM32(modRM, cycles, addr + 1);
                         auto src = reg(static_cast<Reg32>(r));
-                        writeRM32(modRM, doDoubleShiftRight(v, src, count, flags), cycles, addr, true);
+                        writeRM32(modRM, doDoubleShiftRight(v, src, count, flags), cycles, addr + 1, true);
                     }
                     else
                     {
-                        auto v = readRM16(modRM, cycles, addr);
+                        auto v = readRM16(modRM, cycles, addr + 1);
                         auto src = reg(static_cast<Reg16>(r));
-                        writeRM16(modRM, doDoubleShiftRight(v, src, count, flags), cycles, addr, true);
+                        writeRM16(modRM, doDoubleShiftRight(v, src, count, flags), cycles, addr + 1, true);
                     }
 
                     reg(Reg32::EIP) += 2;
@@ -936,14 +936,14 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                 case 0xAF: // IMUL r, r/m
                 {
-                    auto modRM = sys.readMem(addr + 1);
+                    auto modRM = sys.readMem(addr + 2);
                     auto r = (modRM >> 3) & 0x7;
         
                     int cycles;
 
                     if(operandSize32)
                     {
-                        int64_t res = static_cast<int32_t>(readRM32(modRM, cycles, addr)) * static_cast<int32_t>(reg(static_cast<Reg32>(r)));
+                        int64_t res = static_cast<int32_t>(readRM32(modRM, cycles, addr + 1)) * static_cast<int32_t>(reg(static_cast<Reg32>(r)));
                         reg(static_cast<Reg32>(r)) = res;
 
                         // check if upper half matches lower half's sign
@@ -954,7 +954,7 @@ void RAM_FUNC(CPU::executeInstruction)()
                     }
                     else
                     {
-                        int32_t res = static_cast<int16_t>(readRM16(modRM, cycles, addr)) * static_cast<int16_t>(reg(static_cast<Reg16>(r)));
+                        int32_t res = static_cast<int16_t>(readRM16(modRM, cycles, addr + 1)) * static_cast<int16_t>(reg(static_cast<Reg16>(r)));
                         reg(static_cast<Reg16>(r)) = res;
 
                         // check if upper half matches lower half's sign
