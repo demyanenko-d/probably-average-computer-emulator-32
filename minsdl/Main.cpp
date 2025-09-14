@@ -72,7 +72,7 @@ int main(int argc, char *argv[])
     uint32_t timeToRun = 0;
     bool timeLimit = false;
 
-    std::string biosPath = "bios.bun";
+    std::string biosPath = "bios.bin";
     int i = 1;
 
     for(; i < argc; i++)
@@ -116,7 +116,7 @@ int main(int argc, char *argv[])
 
         size_t readLen = biosFile.gcount();
 
-        uint32_t biosBase = 0xF0000;
+        uint32_t biosBase = 0xE0000;
         // move shorter ROM to end (so reset vector is in the right place)
         if(readLen < sizeof(biosROM))
             biosBase += sizeof(biosROM) - readLen;
