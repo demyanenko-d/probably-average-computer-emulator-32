@@ -469,7 +469,7 @@ void RAM_FUNC(CPU::run)(int ms)
 
     cyclesToRun += cycles;
 
-    while(cyclesToRun > 0)
+    while(cyclesToRun > 0 && !halted)
     {
         auto oldCycles = sys.getCycleCount();
 
@@ -3312,6 +3312,15 @@ void RAM_FUNC(CPU::executeInstruction)()
             sys.writeIOPort(port + 1, data >> 8);
 
             cyclesExecuted(8 + 4);
+            break;
+        }
+
+        case 0xF4: // HLT
+        {
+            if(!(flags & Flag_I))
+                printf("HALTED!\n");
+
+            halted = true;
             break;
         }
 

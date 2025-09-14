@@ -156,6 +156,8 @@ private:
 
     // enabling interrupts happens one opcode later
     bool delayInterrupt = false;
+    
+    bool halted = false;
 
     Reg16 segmentOverride;
     bool addressSizeOverride;
