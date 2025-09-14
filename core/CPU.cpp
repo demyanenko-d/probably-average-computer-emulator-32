@@ -3286,7 +3286,10 @@ void RAM_FUNC(CPU::executeInstruction)()
         {
             auto port = reg(Reg16::DX);
 
-            reg(Reg16::AX) = sys.readIOPort(port) | sys.readIOPort(port + 1) << 8;
+            if(operandSize32)
+                reg(Reg32::EAX) = sys.readIOPort(port) | sys.readIOPort(port + 1) << 8 | sys.readIOPort(port + 2) << 16 | sys.readIOPort(port + 3) << 24;
+            else
+                reg(Reg16::AX) = sys.readIOPort(port) | sys.readIOPort(port + 1) << 8;
 
             cyclesExecuted(8 + 4);
             break;
@@ -3306,10 +3309,16 @@ void RAM_FUNC(CPU::executeInstruction)()
         case 0xEF: // OUT AX to DX
         {
             auto port = reg(Reg16::DX);
-            auto data = reg(Reg16::AX);
+            auto data = operandSize32 ? reg(Reg32::EAX) : reg(Reg16::AX);
 
             sys.writeIOPort(port, data);
             sys.writeIOPort(port + 1, data >> 8);
+
+            if(operandSize32)
+            {
+                sys.writeIOPort(port + 2, data >> 16);
+                sys.writeIOPort(port + 3, data >> 24);
+            }
 
             cyclesExecuted(8 + 4);
             break;
