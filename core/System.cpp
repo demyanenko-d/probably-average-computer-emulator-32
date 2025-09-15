@@ -995,7 +995,8 @@ void System::setGraphicsConfig(GraphicsConfig config)
 
 uint8_t RAM_FUNC(System::readMem)(uint32_t addr)
 {
-    addr &= (maxAddress - 1);
+    if(addr >= maxAddress)
+        return 0xFF;
 
     auto block = addr / blockSize;
     
