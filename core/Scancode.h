@@ -1,0 +1,168 @@
+#pragma once
+
+// set 2
+// F0 prefix for release
+// (except it goes after the E0 prefix for extended keys)
+enum class ATScancode
+{
+    Invalid = 0,
+    
+    A = 0x1C,
+    B = 0x32,
+    C = 0x21,
+    D = 0x23,
+    E = 0x24,
+    F = 0x2B,
+    G = 0x34,
+    H = 0x33,
+    I = 0x43,
+    J = 0x3B,
+    K = 0x42,
+    L = 0x4B,
+    M = 0x3A,
+    N = 0x31,
+    O = 0x44,
+    P = 0x4D,
+    Q = 0x15,
+    R = 0x2D,
+    S = 0x1B,
+    T = 0x2C,
+    U = 0x3C,
+    V = 0x2A,
+    W = 0x1D,
+    X = 0x22,
+    Y = 0x35,
+    Z = 0x1A,
+    
+    _1 = 0x16,
+    _2 = 0x1E,
+    _3 = 0x26,
+    _4 = 0x25,
+    _5 = 0x2E,
+    _6 = 0x36,
+    _7 = 0x3D,
+    _8 = 0x3E,
+    _9 = 0x46,
+    _0 = 0x45,
+
+    Return = 0x5A,
+    Escape = 0x76,
+    Backspace = 0x66,
+    Tab = 0x0D,
+    Space = 0x29,
+
+    Minus = 0x4E,
+    Equals = 0x55,
+    LeftBracket = 0x54,
+    RightBracket = 0x5B,
+    Backslash = 0x5D,
+    Semicolon = 0x4C,
+    Apostrophe = 0x52,
+    Grave = 0x0E,
+    Comma = 0x41,
+    Period = 0x49,
+    Slash = 0x4A,
+
+    CapsLock = 0x58,
+
+    F1 = 0x05,
+    F2 = 0x06,
+    F3 = 0x04,
+    F4 = 0x0C,
+    F5 = 0x03,
+    F6 = 0x0B,
+    F7 = 0x83,
+    F8 = 0x0A,
+    F9 = 0x01,
+    F10 = 0x09,
+    F11 = 0x78,
+    F12 = 0x07,
+
+    // PrintScreen = 0xE012E07C, // shift+kpmultiply?
+    ScrollLock = 0x7E,
+    // Pause =  , // ctrl+numlock press with a special prefix, then release
+
+    Insert = 0xE070,
+    Home = 0xE06C,
+    PageUp = 0xE07D,
+    Delete = 0xE071,
+    End = 0xE069,
+    PageDown = 0xE07A,
+    Right = 0xE074,
+    Left = 0xE06B,
+    Down = 0xE072,
+    Up = 0xE075,
+
+    NumLock = 0x77,
+
+    KPDivide = 0xE04A,
+    KPMultiply = 0x7C,
+    KPMinus = 0x7B,
+    KPPlus = 0x79,
+    KPEnter = 0xE05A,
+    KP1 = 0x69,
+    KP2 = 0x72,
+    KP3 = 0x7A,
+    KP4 = 0x6B,
+    KP5 = 0x73,
+    KP6 = 0x74,
+    KP7 = 0x6C,
+    KP8 = 0x75,
+    KP9 = 0x7D,
+    KP0 = 0x70,
+    KPPeriod = 0x71,
+
+    NonUSBackslash = 0x61,
+
+    Application = 0xE02F,
+    Power = 0xE037,
+
+    KPEquals = 0x0F,
+
+    // F13-24
+
+    // skipping unassigned...
+
+    KPComma = 0x6D,
+
+    International1 = 0x51,
+    International2 = 0x13,
+    International3 = 0x6A,
+    International4 = 0x64,
+    International5 = 0x67,
+    International6 = 0x27,
+    Lang1 = 0xF2,
+    Lang2 = 0xF1,
+    Lang3 = 0x63,
+    Lang4 = 0x62,
+    Lang5 = 0x5F,
+
+    LeftCtrl = 0x14,
+    LeftShift = 0x12,
+    LeftAlt = 0x11,
+    LeftGUI = 0xE01F,
+    RightCtrl = 0xE014,
+    RightShift = 0x59,
+    RightAlt = 0xE011,
+    RightGUI = 0xE027,
+
+    NextTrack = 0xE04D,
+    PrevTrack = 0xE015,
+    Stop = 0xE03B,
+    PlayPause = 0xE034,
+    Mute = 0xE023,
+    VolumeUp = 0xE032,
+    VolumeDown = 0xE021,
+    MediaSelect = 0xE050,
+    Mail = 0xE048,
+    Calculator = 0xE02B,
+    MyComputer = 0xE040,
+
+    WWWSearch = 0xE010,
+    WWWHome = 0xE03A,
+    WWWBack = 0xE038,
+    WWWForward = 0xE030,
+    WWWStop = 0xE028,
+    WWWRefresh = 0xE020,
+    WWWFavourites = 0xE018,
+};
