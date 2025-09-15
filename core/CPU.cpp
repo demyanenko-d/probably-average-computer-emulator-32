@@ -469,7 +469,9 @@ void RAM_FUNC(CPU::run)(int ms)
 
     cyclesToRun += cycles;
 
-    while(cyclesToRun > 0 && !halted)
+    auto &chipset = sys.getChipset();
+
+    while(cyclesToRun > 0)
     {
         auto oldCycles = sys.getCycleCount();
 
@@ -483,6 +485,9 @@ void RAM_FUNC(CPU::run)(int ms)
         }
 
         delayInterrupt = false;
+
+        if(halted) // TODO: sync until interrupt
+            break;
 
         executeInstruction();
 
@@ -4271,4 +4276,6 @@ void RAM_FUNC(CPU::serviceInterrupt)(uint8_t vector)
     setSegmentReg(Reg16::CS, newCS);
     reg(Reg32::EIP) = newIP;
     cyclesExecuted(51 + 5 * 4); // timing for INT
+
+    halted = false;
 }
