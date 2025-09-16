@@ -16,6 +16,21 @@ public:
     void dmaComplete(int ch) override {}
 
 private:
+    void setupMemory();
+
+    uint8_t readMem(uint32_t addr);
+    void writeMem(uint32_t addr, uint8_t data);
+
+    static uint8_t readMem(uint32_t addr, void *userData)
+    {
+        return reinterpret_cast<VGACard *>(userData)->readMem(addr);
+    }
+    static void writeMem(uint32_t addr, uint8_t data, void *userData)
+    {
+        reinterpret_cast<VGACard *>(userData)->writeMem(addr, data);
+    }
+
+    System &sys;
 
     uint8_t crtcIndex;
     uint8_t attributeIndex;
@@ -24,4 +39,16 @@ private:
     uint8_t gfxControllerIndex;
 
     bool attributeIsData;
+
+    // sequencer
+    uint8_t seqMapMask = 0; // 2
+    uint8_t seqMemMode = 0; // 4
+
+    // graphics controller
+    uint8_t gfxReadSel = 0; // 4
+    uint8_t gfxMisc = 0;    // 6
+
+    uint8_t miscOutput = 0;
+
+    uint8_t ram[256 * 1024];
 };

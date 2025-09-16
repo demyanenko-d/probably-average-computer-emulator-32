@@ -2,10 +2,13 @@
 
 #include "VGACard.h"
 
-VGACard::VGACard(System &sys)
+VGACard::VGACard(System &sys) : sys(sys)
 {
     // FIXME: some could also be at 3Bx
     sys.addIODevice(0x3E0, 0x3C0, 0, this); // 3Cx/3Dx
+
+    // make sure there isn't any memory mapped so our magic works
+    sys.addMemory(0xA0000, 0x20000, nullptr);
 }
 
 uint8_t VGACard::read(uint16_t addr)
@@ -22,8 +25,7 @@ uint8_t VGACard::read(uint16_t addr)
             return attributeIndex;
 
         case 0x3CC: // misc output
-            printf("VGA R misc out\n");
-            return 0xFF;
+            return miscOutput;
 
         default:
             printf("VGA R %04X\n", addr);
@@ -55,14 +57,34 @@ void VGACard::write(uint16_t addr, uint8_t data)
             break;
 
         case 0x3C2: // misc output
+        {
             printf("VGA W misc out = %02X\n", data);
+
+            auto changed = miscOutput ^ data;
+            miscOutput = data;
+
+            if(changed & (1 << 1))
+                setupMemory();
             break;
+        }
 
         case 0x3C4: // sequencer address
             sequencerIndex = data;
             break;
         case 0x3C5: // sequencer data
             printf("VGA W seq %02X = %02X\n", sequencerIndex, data);
+
+            switch(sequencerIndex)
+            {
+                case 2: // map mask
+                    seqMapMask = data;
+                    break;
+
+                case 4: // memory mode
+                    seqMemMode = data;
+                    setupMemory();
+                    break;
+            }
             break;
         case 0x3C6:
             printf("VGA W dac mask = %02X\n", data);
@@ -84,9 +106,107 @@ void VGACard::write(uint16_t addr, uint8_t data)
 
         case 0x3CF: // graphics controller data
             printf("VGA W gfx %02X = %02X\n", gfxControllerIndex, data);
+
+            switch(gfxControllerIndex)
+            {
+                case 4: // read sel
+                    gfxReadSel = data;
+                    break;
+                
+                case 6:
+                    gfxMisc = data;
+                    setupMemory();
+                    break;
+            }
             break;
 
         default:
             printf("VGA W %04X = %02X\n", addr, data);
+    }
+}
+
+void VGACard::setupMemory()
+{
+    bool enabled = miscOutput & (1 << 1);
+    bool chain = gfxMisc & (1 << 1);
+    int map = (gfxMisc >> 2) & 3;
+    bool oddEven = !(seqMemMode & (1 << 2));
+
+    static const int mapAddrs[]
+    {
+        0xA0000,
+        0xA0000,
+        0xB0000,
+        0xB8000
+    };
+    static const int mapSizes[]
+    {
+        128 * 1024,
+        64 * 1024,
+        32 * 1024,
+        32 * 1024
+    };
+
+    if(!enabled)
+    {
+        printf("VGA RAM disabled\n");
+        sys.setMemAccessCallbacks(0, 0, nullptr, nullptr);
+    }
+    else
+    {
+        printf("VGA RAM at %05X (%iK) chain %i odd/even %i\n", mapAddrs[map], mapSizes[map] / 1024, chain, oddEven);
+        sys.setMemAccessCallbacks(mapAddrs[map], mapSizes[map], &VGACard::readMem, &VGACard::writeMem, this);
+    }
+}
+
+uint8_t VGACard::readMem(uint32_t addr)
+{
+    bool chain = gfxMisc & (1 << 1);
+    //bool oddEven = !(seqMemMode & (1 << 2)); // does odd/even affect this?
+
+    int plane = gfxReadSel;
+    int planeAddr = addr & 0xFFFF;
+
+    auto mappedAddr = planeAddr;
+
+    // remap low bit for chaining
+
+    if(chain)
+        mappedAddr = (mappedAddr & ~1) | ((addr >> 16) & 1);
+
+    //printf("VGA R %05X (%04X, sel %i)\n", addr, mappedAddr, gfxReadSel);
+
+    return ram[mappedAddr + plane * 0x10000];
+}
+
+void VGACard::writeMem(uint32_t addr, uint8_t data)
+{
+    bool chain = gfxMisc & (1 << 1);
+    bool oddEven = !(seqMemMode & (1 << 2));
+
+    int planeAddr = addr & 0xFFFF;
+
+    auto mappedAddr = planeAddr;
+
+    // remap low bit for chaining
+    // TODO: only correct for 64k/no expansion ram
+    if(chain)
+        mappedAddr = (mappedAddr & ~1) | ((addr >> 16) & 1);
+
+    //if(data)
+    //    printf("VGA W %05X(%04X) = %02X\n", addr, mappedAddr, data);
+
+    for(int i = 0; i < 4; i++)
+    {
+        if(!(seqMapMask & (1 << i)))
+            continue;
+
+        // odd/even selects bank based on (original) low bit
+        // 0/1 and 2/3 should have the same masks in this case
+        if(oddEven && (i & 1) != (planeAddr & 1))
+            continue;
+
+        // TODO: graphics controller stuff (set/reset, rotate, latches, and/or/xor, ...)
+        ram[mappedAddr + i * 0x10000] = data;
     }
 }

@@ -152,6 +152,9 @@ class System
 public:
     using MemRequestCallback = uint8_t *(*)(unsigned int block);
 
+    using MemReadCallback = uint8_t(*)(uint32_t addr, void *);
+    using MemWriteCallback = void(*)(uint32_t addr, uint8_t data, void *);
+
     enum class GraphicsConfig
     {
         MDA = 0,
@@ -174,6 +177,8 @@ public:
 
     void setMemoryRequestCallback(MemRequestCallback cb);
     MemRequestCallback getMemoryRequestCallback() const;
+
+    void setMemAccessCallbacks(uint32_t baseAddr, uint32_t size, MemReadCallback readCb, MemWriteCallback writeCb, void *userData = nullptr);
 
     Chipset &getChipset() {return chipset;}
 
@@ -234,6 +239,11 @@ private:
     uint8_t *memMap[maxAddress / blockSize];
 
     MemRequestCallback memReqCb = nullptr;
+
+    uint32_t memAccessCbBase, memAccessCbEnd;
+    MemReadCallback memReadCb = nullptr;
+    MemWriteCallback memWriteCb = nullptr;
+    void *memAccessUserData;
 
     Chipset chipset;
 
