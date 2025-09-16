@@ -1027,6 +1027,21 @@ void RAM_FUNC(CPU::executeInstruction)()
                     break;
                 }
 
+                case 0xC8: // BSWAP (486, need for seabios)
+                case 0xC9:
+                case 0xCA:
+                case 0xCB:
+                case 0xCC:
+                case 0xCD:
+                case 0xCE:
+                case 0xCF:
+                {
+                    auto r = static_cast<Reg32>(opcode2 & 3);
+                    reg(r) = __builtin_bswap32(reg(r));
+                    reg(Reg32::EIP) += 2;
+                    break;
+                }
+
                 default:
                     printf("op 0f %02x @%05x\n", (int)opcode2, addr);
                     exit(1);
