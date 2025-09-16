@@ -888,6 +888,36 @@ void RAM_FUNC(CPU::executeInstruction)()
                     break;
                 }
 
+                case 0xA3: // BT
+                {
+                    auto modRM = sys.readMem(addr + 2);
+                    auto r = (modRM >> 3) & 0x7;
+                    int bit;
+                    bool value;
+                    int cycles;
+
+                    if(operandSize32)
+                    {
+                        bit = reg(static_cast<Reg32>(r));
+                        assert(bit < 32); // FIXME: this can offset a memory operand (modulo for register)
+                        value = readRM32(modRM, cycles, addr + 1) & (1 << bit);
+                    }
+                    else
+                    {
+                        bit = reg(static_cast<Reg16>(r));
+                        assert(bit < 16); // FIXME: ^
+                        value = readRM16(modRM, cycles, addr + 1) & (1 << bit);
+                    }
+
+                    if(value)
+                        flags |= Flag_C;
+                    else
+                        flags &= ~Flag_C;
+
+                    reg(Reg32::EIP) += 2;
+                    break;
+                }
+
                 case 0xAC: // SHRD by imm
                 {
                     auto modRM = sys.readMem(addr + 2);
@@ -1003,6 +1033,46 @@ void RAM_FUNC(CPU::executeInstruction)()
                         reg(static_cast<Reg16>(r)) = v;
 
                     reg(Reg32::EIP) += 2;
+                    break;
+                }
+
+                case 0xBA:
+                {
+                    auto modRM = sys.readMem(addr + 2);
+                    auto exOp = (modRM >> 3) & 0x7;
+
+                    switch(exOp)
+                    {
+                        case 4: // BT
+                        {
+                            int bit = sys.readMem(addr + 3 + getDispLen(modRM, addr + 3));
+                            bool value;
+                            int cycles;
+
+                            if(operandSize32)
+                            {
+                                assert(bit < 32); // FIXME: this can offset a memory operand (modulo for register)
+                                value = readRM32(modRM, cycles, addr + 1) & (1 << bit);
+                            }
+                            else
+                            {
+                                assert(bit < 16); // FIXME: ^
+                                value = readRM16(modRM, cycles, addr + 1) & (1 << bit);
+                            }
+
+                            if(value)
+                                flags |= Flag_C;
+                            else
+                                flags &= ~Flag_C;
+
+                            reg(Reg32::EIP) += 3;
+                            break;
+                        }
+                        default:
+                            printf("op 0f BA %x @%05x\n", (int)exOp, addr);
+                            exit(1);
+                            break;
+                    }
                     break;
                 }
 
