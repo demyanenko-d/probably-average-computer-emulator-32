@@ -1510,6 +1510,67 @@ void RAM_FUNC(CPU::executeInstruction)()
             break;
         }
 
+        case 0x6C: // INS byte
+        {
+            int step = (flags & Flag_D) ? -1 : 1;
+
+            auto port = reg(Reg16::DX);
+
+            uint32_t di;
+            if(addressSize32)
+                di = reg(Reg32::EDI);
+            else
+                di = reg(Reg16::DI);
+
+            if(rep)
+            {
+                cyclesExecuted(2 + 9);
+
+                uint32_t count = addressSize32 ? reg(Reg32::ECX) : reg(Reg16::CX);
+
+                while(count)
+                {
+                    // TODO: interrupt
+                    auto destAddr = getSegmentOffset(Reg16::ES) + di;
+
+                    sys.writeMem(destAddr, sys.readIOPort(port));
+
+                    di += step;
+
+                    if(!addressSize32)
+                        di &= 0xFFFF;
+
+                    count--;
+                    cyclesExecuted(17);
+                }
+
+                if(addressSize32)
+                    reg(Reg32::ECX) = count;
+                else
+                    reg(Reg16::CX) = count;
+            }
+            else
+            {
+                auto destAddr = getSegmentOffset(Reg16::ES) + di;
+
+                sys.writeMem(destAddr, sys.readIOPort(port));
+
+                di += step;
+
+                if(!addressSize32)
+                    di &= 0xFFFF;
+
+                cyclesExecuted(18);
+            }
+
+            if(addressSize32)
+                reg(Reg32::EDI) = di;
+            else
+                reg(Reg16::DI) = di;
+
+            break;
+        }
+
         case 0x70: // JO
         case 0x71: // JNO
         case 0x72: // JB/JNAE
