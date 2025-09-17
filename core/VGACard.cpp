@@ -8,6 +8,69 @@ VGACard::VGACard(System &sys) : sys(sys)
     sys.addIODevice(0x3E0, 0x3C0, 0, this); // 3Cx/3Dx
 }
 
+void VGACard::drawScanline(int line, uint8_t *output)
+{
+    //RGB888
+    auto outputPixel = [&output](int r, int g, int b)
+    {
+        *output++ = r << 2 | r >> 4;
+        *output++ = g << 2 | g >> 4;
+        *output++ = b << 2 | b >> 4;
+        output++;
+    };
+
+    auto plane0 = ram;
+    auto plane1 = ram + 0x10000;
+    auto plane2 = ram + 0x20000;
+
+    if(!(gfxMisc & (1 << 0)))
+    {
+        // text mode
+        int charWidth = seqClockMode & 1 ? 8 : 9;
+        int charHeight = (crtcRegs[0x9] & 0x1F) + 1;
+        int hDispChars = crtcRegs[1] + 1;
+        int offset = crtcRegs[0x13];
+        int startAddr = crtcRegs[0xD] | crtcRegs[0xC] << 8;
+
+        auto charPtr = plane0 + startAddr + offset * 4 * (line / charHeight);
+        auto attrPtr = plane1 + startAddr + offset * 4 * (line / charHeight);
+
+        for(int i = 0; i < hDispChars; i++)
+        {
+            auto ch = *charPtr;
+            auto attr = *attrPtr;
+            charPtr += 2;
+            attrPtr += 2;
+
+            // TODO: blink
+            int bg = attr >> 4;
+            int fg = attr & 0xF;
+
+            // TODO: char sets
+            // TODO: 9px repeat last col
+            auto fontLine = plane2[ch * 32 + line % charHeight];
+
+            // TODO: cursor
+
+            for(int x = 0; x < charWidth; x++)
+            {
+                bool fontVal = ((fontLine << x) & 0x80);
+
+                // double palette lookup
+                uint8_t pal64 = attribPalette[(fontVal ? fg : bg)];
+                auto pal256 = dacPalette + pal64 * 3;
+
+                outputPixel(pal256[0], pal256[1], pal256[2]);
+            }
+        }
+    }
+}
+
+std::tuple<int, int> VGACard::getOutputResolution()
+{
+    return std::make_tuple(outputW, outputH);
+}
+
 uint8_t VGACard::read(uint16_t addr)
 {
     switch(addr)

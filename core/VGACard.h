@@ -5,6 +5,10 @@ class VGACard : public IODevice
 public:
     VGACard(System &sys);
 
+    void drawScanline(int line, uint8_t *output);
+
+    std::tuple<int, int> getOutputResolution();
+
     uint8_t read(uint16_t addr) override;
     void write(uint16_t addr, uint8_t data) override;
 
