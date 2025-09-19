@@ -17,6 +17,8 @@ Chipset::Chipset(System &sys) : sys(sys)
 {
     for(auto &dev : dma.requestedDev)
         dev = nullptr;
+
+    cmosRam[0x10] = 0x44; // floppy drive type
 }
 
 uint8_t Chipset::read(uint16_t addr)
