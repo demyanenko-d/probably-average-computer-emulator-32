@@ -465,15 +465,15 @@ void CPU::reset()
 
 void RAM_FUNC(CPU::run)(int ms)
 {
-    int cycles = (System::getCPUClockSpeed() * ms) / 1000;
+    uint32_t cycles = (System::getClockSpeed() * ms) / 1000;
 
-    cyclesToRun += cycles;
+    auto startCycleCount = sys.getCycleCount();
 
     auto &chipset = sys.getChipset();
 
-    while(cyclesToRun > 0)
+    while(sys.getCycleCount() - startCycleCount < cycles)
     {
-        auto oldCycles = sys.getCycleCount();
+        //auto oldCycles = sys.getCycleCount();
 
         if(chipset.needDMAUpdate())
             chipset.updateDMA();
@@ -4422,8 +4422,7 @@ void CPU::doALU32AImm(uint32_t addr)
 
 void CPU::cyclesExecuted(int cycles)
 {
-    cyclesToRun -= cycles;
-    sys.addCPUCycles(cycles);
+    // stub
 }
 
 void RAM_FUNC(CPU::serviceInterrupt)(uint8_t vector)

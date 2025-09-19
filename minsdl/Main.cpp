@@ -311,6 +311,20 @@ static ATScancode scancodeMap[SDL_SCANCODE_COUNT]
     ATScancode::WWWFavourites,
 };
 
+static Uint64 systemTimerCallback(void *userdata, SDL_TimerID timerID, Uint64 interval)
+{
+    // asking for a 838ns interval was a little optimistic...
+    auto now = SDL_GetTicksNS();
+    static Uint64 lastUpdate = now;
+
+    auto elapsed = (now - lastUpdate) / interval;
+    lastUpdate += elapsed * interval;
+
+    // this expects the old cpu clock (~4.77MHz), we're going for the PIT clock (~1.19MHz)
+    reinterpret_cast<System *>(userdata)->addCPUCycles(elapsed * 4);
+    return interval;
+}
+
 static void pollEvents()
 {
     const int escMod = SDL_KMOD_RCTRL | SDL_KMOD_RSHIFT;
@@ -521,6 +535,9 @@ int main(int argc, char *argv[])
     if(!turbo)
         SDL_ResumeAudioStreamDevice(audioStream);
 
+    // timer
+    SDL_AddTimerNS(838, systemTimerCallback, &sys); // ~1.193MHz
+
     auto lastTick = SDL_GetTicks();
     auto startTime = SDL_GetTicks();
 
@@ -544,7 +561,7 @@ int main(int argc, char *argv[])
         pollEvents();
 
         auto now = SDL_GetTicks();
-      
+
         if(turbo)
         {
             // push as fast as possible

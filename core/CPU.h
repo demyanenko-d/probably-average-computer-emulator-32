@@ -143,7 +143,6 @@ private:
     void serviceInterrupt(uint8_t vector);
 
     // internal state
-    int cyclesToRun = 0;
 
     // registers
     uint32_t regs[18]; // segment regs are only 16-bit...
