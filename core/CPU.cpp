@@ -4001,9 +4001,9 @@ std::tuple<uint32_t, uint32_t> RAM_FUNC(CPU::getEffectiveAddress)(int mod, int r
 
                 int scale = sib >> 6;
                 int index = (sib >> 3) & 7;
-                int base = sib & 7;
+                auto base = static_cast<Reg32>(sib & 7);
 
-                if(mod == 0 && base == 5)
+                if(mod == 0 && base == Reg32::EBP)
                 {
                     // disp32 instead of base
                     memAddr = sys.readMem(addr + 2) | sys.readMem(addr + 3) << 8 | sys.readMem(addr + 4) << 16 | sys.readMem(addr + 5) << 24;
@@ -4012,7 +4012,11 @@ std::tuple<uint32_t, uint32_t> RAM_FUNC(CPU::getEffectiveAddress)(int mod, int r
                         reg(Reg32::EIP) += 4;
                 }
                 else
-                    memAddr = reg(static_cast<Reg32>(base));
+                {
+                    if(base == Reg32::ESP || base == Reg32::EBP)
+                        segBase = Reg16::SS;
+                    memAddr = reg(base);
+                }
 
                 if(index != 4) // SP means no index
                     memAddr += reg(static_cast<Reg32>(index)) << scale;
