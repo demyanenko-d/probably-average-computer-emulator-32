@@ -1683,6 +1683,80 @@ void RAM_FUNC(CPU::executeInstruction)()
 
             break;
         }
+        case 0x6D: // INS word
+        {
+            auto segment = segmentOverride == Reg16::AX ? Reg16::DS : segmentOverride;
+            int step = (flags & Flag_D) ? -2 : 2;
+
+            if(operandSize32)
+                step *= 2;
+
+            auto port = reg(Reg16::DX);
+
+            uint32_t di;
+            if(addressSize32)
+                di = reg(Reg32::EDI);
+            else
+                di = reg(Reg16::DI);
+
+            if(rep)
+            {
+                cyclesExecuted(2 + 9);
+
+                uint32_t count = addressSize32 ? reg(Reg32::ECX) : reg(Reg16::CX);
+
+                while(count)
+                {
+                    // TODO: interrupt
+                    if(operandSize32)
+                    {
+                        auto v = sys.readIOPort16(port) | sys.readIOPort16(port + 2);
+                        writeMem32(di, getSegmentOffset(Reg16::ES), v);
+                    }
+                    else
+                    {
+                        auto v = sys.readIOPort16(port);
+                        writeMem16(di, getSegmentOffset(Reg16::ES), v);
+                    }
+
+                    di += step;
+
+                    if(!addressSize32)
+                        di &= 0xFFFF;
+
+                    count--;
+                    cyclesExecuted(17 + 2 * 4);
+                }
+
+                if(addressSize32)
+                    reg(Reg32::ECX) = count;
+                else
+                    reg(Reg16::CX) = count;
+            }
+            else
+            {
+                if(operandSize32)
+                {
+                    auto v = sys.readIOPort16(port) | sys.readIOPort16(port + 2);
+                    writeMem32(di, getSegmentOffset(Reg16::ES), v);
+                }
+                else
+                {
+                    auto v = sys.readIOPort16(port);
+                    writeMem16(di, getSegmentOffset(Reg16::ES), v);
+                }
+
+                di += step;
+
+                cyclesExecuted(18 + 2 * 4);
+            }
+
+            if(addressSize32)
+                reg(Reg32::EDI) = di;
+            else
+                reg(Reg16::DI) = di;
+            break;
+        }
 
         case 0x70: // JO
         case 0x71: // JNO
