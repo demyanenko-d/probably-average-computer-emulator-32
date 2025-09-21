@@ -1685,7 +1685,6 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0x6D: // INS word
         {
-            auto segment = segmentOverride == Reg16::AX ? Reg16::DS : segmentOverride;
             int step = (flags & Flag_D) ? -2 : 2;
 
             if(operandSize32)
