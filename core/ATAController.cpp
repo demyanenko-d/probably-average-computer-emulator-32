@@ -178,16 +178,17 @@ void ATAController::fillIdentity(int device)
     // fake some CHS sizes
     // this may try too hard
     unsigned heads = 16;
+    unsigned sectorsPerTrack = 4;
 
     // adjust for small sizes that aren't a multiple of 16
     if(sectors & 15)
     {
+        heads++;
         while(sectors % heads)
             heads--;
     }
 
-    unsigned cylinders = sectors / heads;
-    unsigned sectorsPerTrack = 1;
+    unsigned cylinders = sectors / (heads * sectorsPerTrack);
 
     // try to reduce cylinder count to ATA limit
     while(cylinders > 0xFFFF)
@@ -197,7 +198,7 @@ void ATAController::fillIdentity(int device)
     }
 
     // now see how close we can get to old BIOS/DOS limits
-    while(cylinders > 1024 && sectorsPerTrack < 63)
+    while(cylinders > 1024 && sectorsPerTrack * 2 < 63)
     {
         if(cylinders & 1)
             break;
