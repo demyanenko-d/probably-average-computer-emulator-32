@@ -250,7 +250,7 @@ uint8_t VGACard::readMem(uint32_t addr)
 {
     bool chain = gfxMisc & (1 << 1);
     int map = (gfxMisc >> 2) & 3;
-    // bool oddEven = gfxMode & (1 << 4); // does odd/even affect this?
+    bool oddEven = gfxMode & (1 << 4);
 
     int plane = gfxReadSel;
     int planeAddr = addr & 0xFFFF;
@@ -266,6 +266,10 @@ uint8_t VGACard::readMem(uint32_t addr)
         mappedAddr = (mappedAddr & ~1) | ((addr >> 16) & 1);
     else if(chain)
         mappedAddr = (mappedAddr & ~1);
+
+    // ?? this at least makes scrolling work
+    if(oddEven)
+        plane |= (addr & 1);
 
     //printf("VGA R %05X (%04X, sel %i)\n", addr, mappedAddr, gfxReadSel);
 
