@@ -65,9 +65,9 @@ uint8_t Chipset::read(uint16_t addr)
             return dma.status;
 
         case 0x20: // PIC request/service (OCW3)
-            return pic.statusRead & 1 ? pic.service : pic.request;
+            return pic.read(0);
         case 0x21: // PIC mask (OCW1)
-            return pic.mask;
+            return pic.read(1);
     
         case 0x40: // PIT counter 0
         //case 0x41: // PIT counter 1
@@ -230,81 +230,12 @@ void Chipset::write(uint16_t addr, uint8_t data)
         }
 
         case 0x20: // PIC ICW1, OCW 2/3
-        {
-            if(data & (1 << 4)) // ICW1
-            {
-                assert(data & (1 << 0)); // ICW4 needed
-                //assert(data & (1 << 1)); // single
-                assert(!(data & (1 << 3))); // not level triggered
-
-                if(!(data & (1 << 1)))
-                    printf("PIC !single\n");
-
-                pic.initCommand[0] = data;
-                pic.nextInit = 1;
-
-                pic.mask = 0;
-                pic.statusRead = 2; // read IRR
-            }
-            else if(data & (1 << 3)) // OCW3
-            {
-                assert(!(data & (1 << 7)));
-
-                if(data & 0x64)
-                    printf("PIC OCW3 %02X\n", data);
-
-                if(data & 2)
-                    pic.statusRead = (pic.statusRead & 0xFC) | (data & 3);
-            }
-            else // OCW2
-            {
-                auto command = data >> 5;
-
-                switch(command)
-                {
-                    case 1: // non-specific EOI
-                    {
-                        for(int i = 0; i < 8; i++)
-                        {
-                            if(pic.service & (1 << i))
-                            {
-                                pic.service &= ~(1 << i);
-                                break;
-                            }
-                        }
-                        break;
-                    }
-                    default:
-                        printf("PIC OCW2 %02X\n", data);
-                }
-            }
-
+            pic.write(0, data);
             break;
-        }
 
         case 0x21: // PIC
         {
-            if(pic.nextInit == 1) // ICW2
-            {
-                pic.initCommand[1] = data;
-
-                if(!(pic.initCommand[0] & (1 << 1)))
-                    pic.nextInit = 2; // ICW3 needed
-                else
-                    pic.nextInit = 3; // ICW4 (assuming needed)
-            }
-            else if(pic.nextInit == 3) // ICW4
-            {
-                assert(data & (1 << 0)); // 8086/88 mode
-                assert(!(data & (1 << 1))); // not auto EOI
-                assert(!(data & (1 << 2))); // slave
-                assert(data & (1 << 3)); // buffered mode
-                assert(!(data & (1 << 4))); // not special fully nested mode
-
-                pic.initCommand[3] = data;
-                pic.nextInit = 0;
-            }
-            else // mask
+            if(pic.nextInit == 0) // writing mask
             {
                 auto enabled = pic.mask & ~data;
 
@@ -316,10 +247,12 @@ void Chipset::write(uint16_t addr, uint8_t data)
 
                     sys.updateForInterrupts(enabled, data);
                 }
-
-                pic.mask = data;
-                // sys.calculateNextInterruptCycle(sys.getCycleCount()); // FIXME
             }
+
+            pic.write(1, data);
+
+            // sys.calculateNextInterruptCycle(sys.getCycleCount()); // FIXME
+
             break;
         }
 
@@ -788,6 +721,93 @@ void Chipset::sendKey(ATScancode scancode, bool down)
 void Chipset::setSpeakerAudioCallback(SpeakerAudioCallback cb)
 {
     speakerCb = cb;
+}
+
+uint8_t Chipset::PIC::read(int index)
+{
+    if(index == 0) // OCW3
+        return statusRead & 1 ? service : request;
+    else // OCW1
+        return mask;
+}
+
+void Chipset::PIC::write(int index, uint8_t data)
+{
+    if(index == 0) // ICW1, OCW 2/3
+    {
+        if(data & (1 << 4)) // ICW1
+        {
+            assert(data & (1 << 0)); // ICW4 needed
+            //assert(data & (1 << 1)); // single
+            assert(!(data & (1 << 3))); // not level triggered
+
+            if(!(data & (1 << 1)))
+                printf("PIC !single\n");
+
+            initCommand[0] = data;
+            nextInit = 1;
+
+            mask = 0;
+            statusRead = 2; // read IRR
+        }
+        else if(data & (1 << 3)) // OCW3
+        {
+            assert(!(data & (1 << 7)));
+
+            if(data & 0x64)
+                printf("PIC OCW3 %02X\n", data);
+
+            if(data & 2)
+                statusRead = (statusRead & 0xFC) | (data & 3);
+        }
+        else // OCW2
+        {
+            auto command = data >> 5;
+
+            switch(command)
+            {
+                case 1: // non-specific EOI
+                {
+                    for(int i = 0; i < 8; i++)
+                    {
+                        if(service & (1 << i))
+                        {
+                            service &= ~(1 << i);
+                            break;
+                        }
+                    }
+                    break;
+                }
+                default:
+                    printf("PIC OCW2 %02X\n", data);
+            }
+        }
+    }
+    else
+    {
+        if(nextInit == 1) // ICW2
+        {
+            initCommand[1] = data;
+
+            if(!(initCommand[0] & (1 << 1)))
+                nextInit = 2; // ICW3 needed
+            else
+                nextInit = 3; // ICW4 (assuming needed)
+        }
+        else if(nextInit == 3) // ICW4
+        {
+            assert(data & (1 << 0)); // 8086/88 mode
+            assert(!(data & (1 << 1))); // not auto EOI
+            assert(!(data & (1 << 2))); // slave
+            assert(data & (1 << 3)); // buffered mode
+            assert(!(data & (1 << 4))); // not special fully nested mode
+
+            initCommand[3] = data;
+            nextInit = 0;
+        }
+        else // mask
+            mask = data;
+    }
 }
 
 void Chipset::updatePIT()

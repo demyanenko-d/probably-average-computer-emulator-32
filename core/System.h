@@ -96,6 +96,9 @@ private:
 
     struct PIC
     {
+        uint8_t read(int index);
+        void write(int index, uint8_t data);
+
         uint8_t initCommand[4];
         int nextInit = 0;
 
