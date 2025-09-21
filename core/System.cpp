@@ -65,9 +65,9 @@ uint8_t Chipset::read(uint16_t addr)
             return dma.status;
 
         case 0x20: // PIC request/service (OCW3)
-            return pic.read(0);
+            return pic[0].read(0);
         case 0x21: // PIC mask (OCW1)
-            return pic.read(1);
+            return pic[0].read(1);
     
         case 0x40: // PIT counter 0
         //case 0x41: // PIT counter 1
@@ -130,6 +130,11 @@ uint8_t Chipset::read(uint16_t addr)
 
         case 0x92: // system control port A
             return systemControlA;
+    
+        case 0xA0: // second PIC request/service (OCW3)
+            return pic[1].read(0);
+        case 0xA1: // second PIC mask (OCW1)
+            return pic[1].read(1);
 
         default:
             printf("IO R %04X\n", addr);
@@ -230,14 +235,14 @@ void Chipset::write(uint16_t addr, uint8_t data)
         }
 
         case 0x20: // PIC ICW1, OCW 2/3
-            pic.write(0, data);
+            pic[0].write(0, data);
             break;
 
         case 0x21: // PIC
         {
-            if(pic.nextInit == 0) // writing mask
+            if(pic[0].nextInit == 0) // writing mask
             {
-                auto enabled = pic.mask & ~data;
+                auto enabled = pic[0].mask & ~data;
 
                 if(enabled)
                 {
@@ -249,7 +254,7 @@ void Chipset::write(uint16_t addr, uint8_t data)
                 }
             }
 
-            pic.write(1, data);
+            pic[0].write(1, data);
 
             // sys.calculateNextInterruptCycle(sys.getCycleCount()); // FIXME
 
@@ -495,6 +500,29 @@ void Chipset::write(uint16_t addr, uint8_t data)
             systemControlA = data;
             break;
 
+        case 0xA0: // second PIC ICW1, OCW 2/3
+            pic[1].write(0, data);
+            break;
+        case 0xA1: // second PIC
+        {
+            if(pic[1].nextInit == 0) // writing mask
+            {
+                auto enabled = pic[1].mask & ~data;
+
+                if(enabled)
+                {
+                    // sync devices that are getting their IRQ unmasked
+                    sys.updateForInterrupts(enabled, data);
+                }
+            }
+
+            pic[1].write(1, data);
+
+            // sys.calculateNextInterruptCycle(sys.getCycleCount()); // FIXME
+
+            break;
+        }
+
         default:
             printf("IO W %04X = %02X\n", addr, data);
     }
@@ -516,7 +544,7 @@ int Chipset::getCyclesToNextInterrupt(uint32_t cycleCount)
     int toUpdate = std::numeric_limits<int>::max();
 
     // timer
-    if(!(pic.mask & 1))
+    if(!(pic[0].mask & 1))
         toUpdate = std::min(toUpdate, static_cast<int>(pit.nextUpdateCycle - cycleCount));
 
     // might be late for a PIT update sometimes
@@ -632,28 +660,56 @@ void Chipset::updateDMA()
 
 void Chipset::flagPICInterrupt(int index)
 {
-    if(pic.mask & (1 << index))
+    // remap
+    if(index == 2)
+        index = 9;
+
+    int picIndex = index / 8;
+    index &= 7;
+
+    if(pic[picIndex].mask & (1 << index))
         return;
 
-    pic.request |= 1 << index;
+    pic[picIndex].request |= 1 << index;
 }
 
 uint8_t Chipset::acknowledgeInterrupt()
 {
-    auto serviceable = pic.request & ~pic.mask;
+    auto serviceable = pic[0].request & ~pic[0].mask;
 
     int serviceIndex;
 
     for(serviceIndex = 0; serviceIndex < 8; serviceIndex++)
     {
-        if(serviceable & (1 << serviceIndex))
+        if(serviceIndex == 2)
+        {
+            // cascade
+            auto serviceable2 = pic[1].request & ~pic[1].mask;
+
+            for(int i = 0; i < 8; i++)
+            {
+                if(serviceable2 & (1 << i))
+                {
+                    serviceIndex = i + 8;
+                    break;
+                }
+            }
+
+            if(serviceIndex != 2)
+                break;
+        }
+        else if(serviceable & (1 << serviceIndex))
             break;
     }
 
-    pic.service |= 1 << serviceIndex;
-    pic.request &= ~(1 << serviceIndex);
+    // map to 1st/second pic
+    int picIndex = serviceIndex / 8;
+    serviceIndex &= 7;
 
-    return serviceIndex | (pic.initCommand[1] & 0xF8);
+    pic[picIndex].service |= 1 << serviceIndex;
+    pic[picIndex].request &= ~(1 << serviceIndex);
+
+    return serviceIndex | (pic[picIndex].initCommand[1] & 0xF8);
 }
 
 void Chipset::sendKey(ATScancode scancode, bool down)

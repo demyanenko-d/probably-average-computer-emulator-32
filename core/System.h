@@ -55,8 +55,8 @@ public:
     bool needDMAUpdate() const {return dma.request & ~dma.mask;}
 
     // PIC access/helpers
-    bool hasInterrupt() const {return pic.request & ~pic.mask;}
-    uint8_t getPICMask() const {return pic.mask;}
+    bool hasInterrupt() const {return (pic[0].request & ~pic[0].mask) || (pic[1].request & ~pic[1].mask);}
+    uint8_t getPICMask() const {return pic[0].mask;}
 
     void flagPICInterrupt(int index);
     uint8_t acknowledgeInterrupt();
@@ -136,7 +136,7 @@ private:
 
     DMA dma;
 
-    PIC pic;
+    PIC pic[2];
 
     PIT pit;
 
