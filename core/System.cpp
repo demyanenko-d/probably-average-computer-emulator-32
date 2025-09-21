@@ -391,28 +391,42 @@ void Chipset::write(uint16_t addr, uint8_t data)
             else if(devIndex == 0 && i8042DeviceCommand[0])
             {
                 // assume first is keyboard
-                if(i8042DeviceCommand[0] == 0xED) // set LEDs
+                switch(i8042DeviceCommand[0])
                 {
-                    printf("8042 set keyboard leds %x\n", data);
-                    i8042Queue.push(0xFA); // ACK
-                }
-                else if(i8042DeviceCommand[0] == 0xF0) // get/set scancode set
-                {
-                    switch(data)
-                    {
-                        case 0:
-                            i8042Queue.push(0xFA); // ACK
-                            i8042Queue.push(0x41); // set 2 (TODO) (also this is translated)
-                            break;
+                    case 0xED: // set LEDs
+                        printf("8042 set keyboard leds %x\n", data);
+                        i8042Queue.push(0xFA); // ACK
+                        break;
+    
+                    case 0xF0: // get/set scancode set
+                        switch(data)
+                        {
+                            case 0:
+                                i8042Queue.push(0xFA); // ACK
+                                i8042Queue.push(0x41); // set 2 (TODO) (also this is translated)
+                                break;
 
-                        case 1:
-                        case 2:
-                        case 3:
-                            printf("8042 scancode set %i\n", data);
-                            i8042Queue.push(0xFA); // ACK
-                            break;
+                            case 1:
+                            case 2:
+                            case 3:
+                                printf("8042 scancode set %i\n", data);
+                                i8042Queue.push(0xFA); // ACK
+                                break;
+                        }
+                        break;
+                    
+                    case 0xF3: // typematic
+                    {
+                        auto rate = data & 0x1F;
+                        auto delay = (data >> 5) & 3;
+
+                        printf("8042 typematic rate %i delay %i\n", rate, delay);
+
+                        i8042Queue.push(0xFA); // ACK
+                        break;
                     }
                 }
+
                 i8042DeviceCommand[0] = 0;
                 break;
             }
@@ -434,6 +448,13 @@ void Chipset::write(uint16_t addr, uint8_t data)
                     break;
 
                 case 0xF0: // get/set code set
+                    if(devIndex == 0)
+                    {
+                        i8042DeviceCommand[0] = data;
+                        i8042Queue.push(0xFA); // ACK
+                    }
+                    break;
+                case 0xF3: // typematic
                     if(devIndex == 0)
                     {
                         i8042DeviceCommand[0] = data;
