@@ -124,7 +124,10 @@ uint8_t Chipset::read(uint16_t addr)
 
         case 0x64: // 8042 "keyboard controller" status
         {
-            return i8042Queue.empty() ? 0 : 1 << 0;
+            bool hasOutputData = !i8042Queue.empty();
+            bool port2 = hasOutputData ? (i8042Queue.peek() >> 8) : false;
+            return (hasOutputData ? 1 << 0 : 0)
+                 | (port2 ? 1 << 5 : 0);
         } 
 
         case 0x70: // CMOS index
@@ -433,20 +436,52 @@ void Chipset::write(uint16_t addr, uint8_t data)
             else if(devIndex == 1 && i8042DeviceCommand[1])
             {
                 // assume second is mouse
+                switch(i8042DeviceCommand[1])
+                {
+                    case 0xE8: // set resolution
+                        printf("8042 mouse resolution %i\n", data);
+                        i8042Queue.push(0x1FA); // ACK
+                        break;
+
+                    case 0xF3: // set sample rate
+                        printf("8042 mouse sample rate %i\n", data);
+                        i8042Queue.push(0x1FA); // ACK
+                        break;
+                }
+
                 i8042DeviceCommand[1] = 0;
                 break;
             }
 
             switch(data)
             {
+                case 0xE6: // set scaling 1:1
+                    if(devIndex == 1)
+                        i8042Queue.push(0xFA | devIndex << 8); // ACK
+                    break;
+
+                case 0xE8: // resolution
+                    if(devIndex == 1)
+                    {
+                        i8042DeviceCommand[1] = data;
+                        i8042Queue.push(0xFA | devIndex << 8); // ACK
+                    }
+                    break;
+
                 case 0xED: // set LEDs
                 case 0xF0: // get/set code set
-                case 0xF3: // typematic
                     if(devIndex == 0)
                     {
                         i8042DeviceCommand[0] = data;
                         i8042Queue.push(0xFA); // ACK
                     }
+                    else
+                        printf("8042 dat %02X (dev %i)\n", data, devIndex);
+                    break;
+
+                case 0xF3: // typematic (keyboard)/ sample rate (mouse)
+                    i8042DeviceCommand[devIndex] = data;
+                    i8042Queue.push(0xFA | devIndex << 8); // ACK
                     break;
                 case 0xF4: // enable sending
                     i8042DeviceSendEnabled |= (1 << devIndex);
@@ -460,6 +495,10 @@ void Chipset::write(uint16_t addr, uint8_t data)
                 case 0xFF: // reset and test
                     i8042Queue.push(0xFA | devIndex << 8); // ACK
                     i8042Queue.push(0xAA | devIndex << 8); // passed
+
+                    // device id for mouse
+                    if(devIndex == 1)
+                        i8042Queue.push(0x00 | devIndex << 8);
                     break;
 
                 default:
