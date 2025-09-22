@@ -132,8 +132,48 @@ uint8_t VGACard::read(uint16_t addr)
         case 0x3C0: // attribute address
             return attributeIndex;
 
+        case 0x3C5: // sequencer data
+            switch(sequencerIndex)
+            {
+                case 1: // clock mode
+                    return seqClockMode;
+                case 2: // map mask
+                    return seqMapMask;
+
+                case 4: // memory mode
+                    return seqMemMode;
+
+                default:
+                    printf("VGA R seq %02X\n", sequencerIndex);
+            }
+            return 0xFF;
+
         case 0x3CC: // misc output
             return miscOutput;
+
+        case 0x3CF: // graphics controller data
+            switch(gfxControllerIndex)
+            {
+                case 0: // set/reset
+                    return gfxSetReset;
+                case 1: // enable set/reset
+                    return gfxEnableSetRes;
+                
+                case 3: // data rotate
+                    return gfxDataRotate;
+                case 4: // read sel
+                    return gfxReadSel;
+                case 5: // mode
+                    return gfxMode;
+                case 6: // misc
+                    return gfxMisc;
+                
+                case 8: // bit mask
+                    return gfxBitMask;
+                default:
+                    printf("VGA R gfx %02X\n", gfxControllerIndex);
+            }
+            return 0xFF;
 
         default:
             printf("VGA R %04X\n", addr);
