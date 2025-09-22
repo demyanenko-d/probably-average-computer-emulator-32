@@ -2373,8 +2373,7 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0x9D: // POPF
         {
-            flags = pop(operandSize32);
-            flags = (flags & 0xFD5) | 0xF002;
+            flags = (flags & 0x30000) | (pop(operandSize32) & 0x7FD5) | 2;
 
             cyclesExecuted(8 + 4);
             break;
@@ -3271,8 +3270,7 @@ void RAM_FUNC(CPU::executeInstruction)()
             auto newCS = pop(operandSize32);
 
             // pop flags
-            flags = pop(operandSize32);
-            flags = (flags & 0xFD5) | 0xF002;
+            flags = (flags & 0x30000) | (pop(operandSize32) & 0x7FD5) | 2;
 
             setSegmentReg(Reg16::CS, newCS);
             setIP(newIP);
