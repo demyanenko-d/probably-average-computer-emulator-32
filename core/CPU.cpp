@@ -1757,6 +1757,83 @@ void RAM_FUNC(CPU::executeInstruction)()
             break;
         }
 
+        case 0x6F: // OUTS word
+        {
+            auto segment = segmentOverride == Reg16::AX ? Reg16::DS : segmentOverride;
+            int step = (flags & Flag_D) ? -2 : 2;
+
+            if(operandSize32)
+                step *= 2;
+
+            auto port = reg(Reg16::DX);
+
+            uint32_t si;
+            if(addressSize32)
+                si = reg(Reg32::ESI);
+            else
+                si = reg(Reg16::SI);
+
+            if(rep)
+            {
+                cyclesExecuted(2 + 9);
+
+                uint32_t count = addressSize32 ? reg(Reg32::ECX) : reg(Reg16::CX);
+
+                while(count)
+                {
+                    // TODO: interrupt
+                    if(operandSize32)
+                    {
+                        auto v = readMem32(si, getSegmentOffset(segment));
+                        sys.writeIOPort16(port, v);
+                        sys.writeIOPort16(port + 2, v >> 16);
+                    }
+                    else
+                    {
+                        auto v = readMem16(si, getSegmentOffset(segment));
+                        sys.writeIOPort16(port, v);
+                    }
+
+                    si += step;
+
+                    if(!addressSize32)
+                        si &= 0xFFFF;
+
+                    count--;
+                    cyclesExecuted(17 + 2 * 4);
+                }
+
+                if(addressSize32)
+                    reg(Reg32::ECX) = count;
+                else
+                    reg(Reg16::CX) = count;
+            }
+            else
+            {
+                if(operandSize32)
+                {
+                    auto v = readMem32(si, getSegmentOffset(segment));
+                    sys.writeIOPort16(port, v);
+                    sys.writeIOPort16(port + 2, v >> 16);
+                }
+                else
+                {
+                    auto v = readMem16(si, getSegmentOffset(segment));
+                    sys.writeIOPort16(port, v);
+                }
+
+                si += step;
+
+                cyclesExecuted(18 + 2 * 4);
+            }
+
+            if(addressSize32)
+                reg(Reg32::ESI) = si;
+            else
+                reg(Reg16::SI) = si;
+            break;
+        }
+    
         case 0x70: // JO
         case 0x71: // JNO
         case 0x72: // JB/JNAE
