@@ -52,6 +52,8 @@ private:
 
     int pioReadLen = 0;
     int pioReadSectors = 0;
+    int pioWriteLen;
+    int pioWriteSectors;
 
     uint32_t curLBA;
 

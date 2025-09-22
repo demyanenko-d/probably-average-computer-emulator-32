@@ -15,6 +15,7 @@ enum ATAStatus
 enum class ATACommand
 {
     READ_SECTOR            = 0x20,
+    WRITE_SECTOR           = 0x30,
     PACKET                 = 0xA0,
     IDENTIFY_PACKET_DEVICE = 0xA1,
     IDENTIFY_DEVICE        = 0xEC,
@@ -181,6 +182,38 @@ void ATAController::write(uint16_t addr, uint8_t data)
                         pioReadSectors = sectorCount;
                         bufOffset = 0;
 
+                        status &= ~Status_DRDY;
+                        status |= Status_DRQ;
+                    }
+                    break;
+                }
+                case ATACommand::WRITE_SECTOR:
+                {
+                    bool isLBA = (deviceHead >> 6) & 1;
+                    uint32_t lba;
+                    if(isLBA)
+                    {
+                        lba = lbaLowSector | lbaMidCylinderLow << 8 | lbaHighCylinderHigh << 16 | (deviceHead & 0xF) << 24;
+                        printf("ATA dev %i write %i sectors LBA %u\n", dev, sectorCount, lba);
+                    }
+                    else
+                    {
+                        auto cylinder = lbaMidCylinderLow | lbaHighCylinderHigh << 8;
+                        int head = deviceHead & 0xF;
+                        lba = (cylinder * numHeads[dev] + head) *sectorsPerTrack[dev] + (lbaLowSector - 1);
+                        printf("ATA dev %i write %i sectors C %u H %u S %u LBA %u\n", dev, sectorCount, cylinder, head, lbaLowSector, lba);
+                    }
+
+                    // setup write
+                    if(!io || !io->getNumSectors(dev))
+                        status |= Status_ERR;
+                    else
+                    {
+                        curLBA = lba;
+
+                        pioWriteLen = 512;
+                        pioWriteSectors = sectorCount;
+                        bufOffset = 0;
 
                         status &= ~Status_DRDY;
                         status |= Status_DRQ;
@@ -219,7 +252,48 @@ void ATAController::write(uint16_t addr, uint8_t data)
 
 void ATAController::write16(uint16_t addr, uint16_t data)
 {
-    printf("ATA W16 %04X = %04X\n", addr, data);
+    switch(addr & ~(1 << 7))
+    {
+        case 0x170: // data
+        {
+            if(pioWriteLen)
+            {
+                sectorBuf[bufOffset++] = data & 0xFF;
+                sectorBuf[bufOffset++] = data >> 8;
+
+                // check for end of transfer
+                if(bufOffset == pioWriteLen)
+                {
+                    int dev = (deviceHead >> 4) & 1;
+
+                    if(!io || !io->write(dev, sectorBuf, curLBA))
+                        status |= Status_ERR;
+
+                    if(pioWriteSectors > 1)
+                    {
+                        // prepare for next sector
+                        curLBA++;
+                        pioWriteSectors--;
+                        bufOffset = 0;
+                    }
+                    else
+                    {
+                        pioWriteLen = 0;
+                        pioWriteSectors = 0;
+
+                        // clear data request, set ready
+                        status |= Status_DRDY;
+                        status &= ~Status_DRQ;
+                    }
+                }
+            }
+
+            break;
+        }
+
+        default:
+            printf("ATA W16 %04X = %04X\n", addr, data);
+    }
 }
 
 void ATAController::fillIdentity(int device)
