@@ -378,10 +378,17 @@ static void pollEvents()
             }
 
             case SDL_EVENT_MOUSE_MOTION:
+                sys.getChipset().addMouseMotion(event.motion.xrel, event.motion.yrel);
                 break;
 
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
             case SDL_EVENT_MOUSE_BUTTON_UP:
+                if(event.button.button == SDL_BUTTON_LEFT)
+                    sys.getChipset().setMouseButton(0, event.button.down);
+                else if(event.button.button == SDL_BUTTON_RIGHT)
+                    sys.getChipset().setMouseButton(1, event.button.down);
+                else if(event.button.button == SDL_BUTTON_MIDDLE)
+                    sys.getChipset().setMouseButton(2, event.button.down);
                 break;
 
             case SDL_EVENT_QUIT:
@@ -389,6 +396,8 @@ static void pollEvents()
                 break;
         }
     }
+
+    sys.getChipset().syncMouse();
 }
 
 int main(int argc, char *argv[])
