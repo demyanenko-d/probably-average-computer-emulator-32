@@ -535,6 +535,7 @@ void RAM_FUNC(CPU::executeInstruction)()
 
     bool operandSize32 = isOperandSize32(operandSizeOverride);
     bool addressSize32 = isOperandSize32(addressSizeOverride);
+    bool stackAddrSize32 = isStackAddressSize32();
 
     // TODO: make this return the address?
     auto getDispLen = [this, &addressSize32](uint8_t modRM, uint32_t nextAddr)
@@ -586,27 +587,38 @@ void RAM_FUNC(CPU::executeInstruction)()
     };
 
     //push/pop
-    auto push = [this](uint32_t val, bool is32)
+    auto push = [this, stackAddrSize32](uint32_t val, bool is32)
     {
-        // FIXME: stack-address size (B in SS descriptor)
-        reg(Reg16::SP) -= is32 ? 4 : 2;
+        uint32_t sp = stackAddrSize32 ? reg(Reg32::ESP) : reg(Reg16::SP);
+        sp -= is32 ? 4 : 2;
+
         if(is32)
-            writeMem32(reg(Reg16::SP), getSegmentOffset(Reg16::SS), val);
+            writeMem32(sp, getSegmentOffset(Reg16::SS), val);
         else
-            writeMem16(reg(Reg16::SP), getSegmentOffset(Reg16::SS), val);
+            writeMem16(sp, getSegmentOffset(Reg16::SS), val);
+
+        if(stackAddrSize32)
+            reg(Reg32::ESP) = sp;
+        else
+            reg(Reg16::SP) = sp;
     };
 
-    auto pop = [this]( bool is32)
+    auto pop = [this, stackAddrSize32](bool is32)
     {
-        // FIXME: stack-address size (B in SS descriptor)
+        uint32_t sp = stackAddrSize32 ? reg(Reg32::ESP) : reg(Reg16::SP);
         uint32_t ret;
         
         if(is32)
-            ret = readMem32(reg(Reg16::SP), getSegmentOffset(Reg16::SS));
+            ret = readMem32(sp, getSegmentOffset(Reg16::SS));
         else
-            ret = readMem16(reg(Reg16::SP), getSegmentOffset(Reg16::SS));
+            ret = readMem16(sp, getSegmentOffset(Reg16::SS));
 
-        reg(Reg16::SP) += is32 ? 4 : 2;
+        sp += is32 ? 4 : 2;
+
+        if(stackAddrSize32)
+            reg(Reg32::ESP) = sp;
+        else
+            reg(Reg16::SP) = sp;
 
         return ret;
     };
@@ -4367,6 +4379,18 @@ bool CPU::isOperandSize32(bool override)
     }
 
     return override;
+}
+
+bool CPU::isStackAddressSize32()
+{
+    if(isProtectedMode())
+    {
+        // B bit in SS descriptor
+        // (same bit as D)
+        return getCachedSegmentDescriptor(Reg16::SS).flags & (1 << 14);
+    }
+
+    return false;
 }
 
 uint8_t RAM_FUNC(CPU::readRM8)(uint8_t modRM, int &cycles, uint32_t addr)
