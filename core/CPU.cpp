@@ -2985,72 +2985,113 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0xAA: // STOS byte
         {
+            int step = (flags & Flag_D) ? -1 : 1;
+
+            uint32_t di;
+            if(addressSize32)
+                di = reg(Reg32::EDI);
+            else
+                di = reg(Reg16::DI);
+
             if(rep)
             {
                 cyclesExecuted(2 + 9);
 
-                while(reg(Reg16::CX))
+                uint32_t count = addressSize32 ? reg(Reg32::ECX) : reg(Reg16::CX);
+
+                while(count)
                 {
                     // TODO: interrupt
-
-                    auto addr = (getSegmentOffset(Reg16::ES)) + reg(Reg16::DI);
+                    auto addr = (getSegmentOffset(Reg16::ES)) + di;
                     sys.writeMem(addr, reg(Reg8::AL));
 
-                    if(flags & Flag_D)
-                        reg(Reg16::DI)--;
-                    else
-                        reg(Reg16::DI)++;
+                    di += step;
 
-                    reg(Reg16::CX)--;
+                    if(!addressSize32)
+                        di &= 0xFFFF;
+
+                    count--;
                     cyclesExecuted(10);
                 }
+
+                if(addressSize32)
+                    reg(Reg32::ECX) = count;
+                else
+                    reg(Reg16::CX) = count;
             }
             else
             {
-                auto addr = (getSegmentOffset(Reg16::ES)) + reg(Reg16::DI);
+                auto addr = (getSegmentOffset(Reg16::ES)) + di;
                 sys.writeMem(addr, reg(Reg8::AL));
 
-                if(flags & Flag_D)
-                    reg(Reg16::DI)--;
-                else
-                    reg(Reg16::DI)++;
+                di += step;
 
                 cyclesExecuted(11);
             }
+
+            if(addressSize32)
+                reg(Reg32::EDI) = di;
+            else
+                reg(Reg16::DI) = di;
             break;
         }
         case 0xAB: // STOS word
         {
+            int step = (flags & Flag_D) ? -2 : 2;
+
+            if(operandSize32)
+                step *= 2;
+
+            uint32_t di;
+            if(addressSize32)
+                di = reg(Reg32::EDI);
+            else
+                di = reg(Reg16::DI);
+
             if(rep)
             {
                 cyclesExecuted(2 + 9);
 
-                while(reg(Reg16::CX))
+                uint32_t count = addressSize32 ? reg(Reg32::ECX) : reg(Reg16::CX);
+
+                while(count)
                 {
                     // TODO: interrupt
-
-                    writeMem16(reg(Reg16::DI), getSegmentOffset(Reg16::ES), reg(Reg16::AX));
-
-                    if(flags & Flag_D)
-                        reg(Reg16::DI) -= 2;
+                    if(operandSize32)
+                        writeMem32(di, getSegmentOffset(Reg16::ES), reg(Reg32::EAX));
                     else
-                        reg(Reg16::DI) += 2;
+                        writeMem16(di, getSegmentOffset(Reg16::ES), reg(Reg16::AX));
 
-                    reg(Reg16::CX)--;
+                    di += step;
+
+                    if(!addressSize32)
+                        di &= 0xFFFF;
+
+                    count--;
                     cyclesExecuted(10 + 4);
                 }
+
+                if(addressSize32)
+                    reg(Reg32::ECX) = count;
+                else
+                    reg(Reg16::CX) = count;
             }
             else
             {
-                writeMem16(reg(Reg16::DI), getSegmentOffset(Reg16::ES), reg(Reg16::AX));
-
-                if(flags & Flag_D)
-                    reg(Reg16::DI) -= 2;
+                if(operandSize32)
+                    writeMem32(di, getSegmentOffset(Reg16::ES), reg(Reg32::EAX));
                 else
-                    reg(Reg16::DI) += 2;
+                    writeMem16(di, getSegmentOffset(Reg16::ES), reg(Reg16::AX));
+
+                di += step;
 
                 cyclesExecuted(11 + 4);
             }
+
+            if(addressSize32)
+                reg(Reg32::EDI) = di;
+            else
+                reg(Reg16::DI) = di;
             break;
         }
         case 0xAC: // LODS byte
