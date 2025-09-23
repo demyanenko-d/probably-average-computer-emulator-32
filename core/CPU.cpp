@@ -3312,6 +3312,69 @@ void RAM_FUNC(CPU::executeInstruction)()
             break;
         }
 
+        case 0xC8: // ENTER
+        {
+            uint16_t allocSize = sys.readMem(addr + 1) | sys.readMem(addr + 2) << 8;
+            int nestingLevel = sys.readMem(addr + 2) % 32;
+
+            push(reg(Reg32::EBP), operandSize32);
+
+            auto frameTemp = operandSize32 ? reg(Reg32::ESP) : reg(Reg16::SP);
+
+            if(nestingLevel)
+            {
+                auto bp = stackAddrSize32 ? reg(Reg32::EBP) : reg(Reg16::BP);
+                for(int i = 0; i < nestingLevel - 1; i++)
+                {
+                    bp -= (operandSize32 ? 4 : 2);
+
+                    uint32_t val = sys.readMem(bp) | sys.readMem(bp + 1) << 8;
+                    if(operandSize32)
+                        val |= sys.readMem(bp + 2) << 16 | sys.readMem(bp + 3) << 24;
+
+                    push(val, operandSize32);
+                }
+
+                if(stackAddrSize32)
+                    reg(Reg32::EBP) = bp;
+                else
+                    reg(Reg16::BP) = bp;
+
+                push(frameTemp, operandSize32);
+            }
+
+            if(operandSize32)
+            {
+                reg(Reg32::EBP) = frameTemp;
+                reg(Reg32::ESP) -= allocSize;
+            }
+            else
+            {
+                reg(Reg16::BP) = frameTemp;
+                reg(Reg16::SP) -= allocSize;
+            }
+
+            reg(Reg32::EIP) += 3;
+            break;
+        }
+        case 0xC9: // LEAVE
+        {
+            // restore SP
+            if(stackAddrSize32)
+                reg(Reg32::ESP) = reg(Reg32::EBP);
+            else
+                reg(Reg16::SP) = reg(Reg16::BP);
+            
+            // restore BP
+            auto val = pop(operandSize32);
+            if(operandSize32)
+                reg(Reg32::EBP) = val;
+            else
+                reg(Reg16::BP) = val;
+
+            break;
+        }
+
         case 0xCA: // RET far, add to SP
         {
             // pop IP
