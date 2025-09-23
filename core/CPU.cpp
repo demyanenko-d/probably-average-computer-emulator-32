@@ -3166,61 +3166,11 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
 
         case 0xC4: // LES
-        {
-            auto modRM = sys.readMem(addr + 1);
-            auto mod = modRM >> 6;
-            auto r = (modRM >> 3) & 0x7;
-            auto rm = modRM & 7;
-
-            assert(mod != 3);
-
-            int cycles = 16 + 2 * 4;
-    
-            auto [offset, segment] = getEffectiveAddress(mod, rm, cycles, false, addr);
-
-            if(operandSize32)
-            {
-                reg(static_cast<Reg32>(r)) = readMem32(offset, segment);
-                setSegmentReg(Reg16::ES, readMem16(offset + 4, segment));
-            }
-            else
-            {
-                reg(static_cast<Reg16>(r)) = readMem16(offset, segment);
-                setSegmentReg(Reg16::ES, readMem16(offset + 2, segment));
-            }
-            
-            reg(Reg32::EIP) += 1;
-            cyclesExecuted(cycles);
+            loadFarPointer(addr, Reg16::ES, operandSize32);
             break;
-        }
         case 0xC5: // LDS
-        {
-            auto modRM = sys.readMem(addr + 1);
-            auto mod = modRM >> 6;
-            auto r = (modRM >> 3) & 0x7;
-            auto rm = modRM & 7;
-
-            assert(mod != 3);
-
-            int cycles = 16 + 2 * 4;
-    
-            auto [offset, segment] = getEffectiveAddress(mod, rm, cycles, false, addr);
-
-            if(operandSize32)
-            {
-                reg(static_cast<Reg32>(r)) = readMem32(offset, segment);
-                setSegmentReg(Reg16::DS, readMem16(offset + 4, segment));
-            }
-            else
-            {
-                reg(static_cast<Reg16>(r)) = readMem16(offset, segment);
-                setSegmentReg(Reg16::DS, readMem16(offset + 2, segment));
-            }
-            
-            reg(Reg32::EIP) += 1;
-            cyclesExecuted(cycles);
+            loadFarPointer(addr, Reg16::DS, operandSize32);
             break;
-        }
 
         case 0xC6: // MOV imm8 -> r/m
         {
@@ -4621,6 +4571,34 @@ void CPU::doALU32AImm(uint32_t addr)
 
     reg(Reg32::EIP) += 4;
     cyclesExecuted(4);
+}
+
+// LES/LDS/...
+void CPU::loadFarPointer(uint32_t addr, Reg16 segmentReg, bool operandSize32)
+{
+    auto modRM = sys.readMem(addr + 1);
+    auto mod = modRM >> 6;
+    auto r = (modRM >> 3) & 0x7;
+    auto rm = modRM & 7;
+
+    assert(mod != 3);
+
+    int cycles = 16 + 2 * 4;
+
+    auto [offset, segment] = getEffectiveAddress(mod, rm, cycles, false, addr);
+
+    if(operandSize32)
+    {
+        reg(static_cast<Reg32>(r)) = readMem32(offset, segment);
+        setSegmentReg(segmentReg, readMem16(offset + 4, segment));
+    }
+    else
+    {
+        reg(static_cast<Reg16>(r)) = readMem16(offset, segment);
+        setSegmentReg(segmentReg, readMem16(offset + 2, segment));
+    }
+    
+    reg(Reg32::EIP) += 1;
 }
 
 void CPU::cyclesExecuted(int cycles)

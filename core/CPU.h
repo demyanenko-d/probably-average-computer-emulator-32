@@ -139,6 +139,9 @@ private:
     template<ALUOp32 op>
     void doALU32AImm(uint32_t addr);
 
+    // misc op helpers
+    void loadFarPointer(uint32_t addr, Reg16 segmentReg, bool operandSize32);
+
     void cyclesExecuted(int cycles);
 
     void serviceInterrupt(uint8_t vector);
