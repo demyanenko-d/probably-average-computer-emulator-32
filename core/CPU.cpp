@@ -2720,112 +2720,184 @@ void RAM_FUNC(CPU::executeInstruction)()
         case 0xA6: // CMPS byte
         {
             auto segment = segmentOverride == Reg16::AX ? Reg16::DS : segmentOverride;
+            int step = (flags & Flag_D) ? -1 : 1;
+
+            uint32_t si, di;
+            if(addressSize32)
+            {
+                si = reg(Reg32::ESI);
+                di = reg(Reg32::EDI);
+            }
+            else
+            {
+                si = reg(Reg16::SI);
+                di = reg(Reg16::DI);
+            }
+
             if(rep)
             {
                 cyclesExecuted(2 + 9);
 
-                while(reg(Reg16::CX))
+                uint32_t count = addressSize32 ? reg(Reg32::ECX) : reg(Reg16::CX);
+
+                while(count)
                 {
                     // TODO: interrupt
 
-                    auto srcAddr = getSegmentOffset(segment) + reg(Reg16::SI);
-                    auto destAddr = getSegmentOffset(Reg16::ES) + reg(Reg16::DI);
+                    auto srcAddr = getSegmentOffset(segment) + si;
+                    auto destAddr = getSegmentOffset(Reg16::ES) + di;
 
                     doSub(sys.readMem(srcAddr), sys.readMem(destAddr), flags);
 
-                    if(flags & Flag_D)
+                    si += step;
+                    di += step;
+
+                    if(!addressSize32)
                     {
-                        reg(Reg16::SI)--;
-                        reg(Reg16::DI)--;
-                    }
-                    else
-                    {
-                        reg(Reg16::SI)++;
-                        reg(Reg16::DI)++;
+                        si &= 0xFFFF;
+                        di &= 0xFFFF;
                     }
 
-                    reg(Reg16::CX)--;
+                    count--;
                     cyclesExecuted(22);
 
                     if(!!(flags & Flag_Z) != repZ)
                         break;
                 }
+
+                if(addressSize32)
+                    reg(Reg32::ECX) = count;
+                else
+                    reg(Reg16::CX) = count;
             }
             else
             {
-                auto srcAddr = getSegmentOffset(segment) + reg(Reg16::SI);
-                auto destAddr = getSegmentOffset(Reg16::ES) + reg(Reg16::DI);
+                auto srcAddr = getSegmentOffset(segment) + si;
+                auto destAddr = getSegmentOffset(Reg16::ES) + di;
 
                 doSub(sys.readMem(srcAddr), sys.readMem(destAddr), flags);
 
-                if(flags & Flag_D)
+                si += step;
+                di += step;
+
+                if(!addressSize32)
                 {
-                    reg(Reg16::SI)--;
-                    reg(Reg16::DI)--;
-                }
-                else
-                {
-                    reg(Reg16::SI)++;
-                    reg(Reg16::DI)++;
+                    si &= 0xFFFF;
+                    di &= 0xFFFF;
                 }
 
                 cyclesExecuted(22);
+            }
+
+            if(addressSize32)
+            {
+                reg(Reg32::ESI) = si;
+                reg(Reg32::EDI) = di;
+            }
+            else
+            {
+                reg(Reg16::SI) = si;
+                reg(Reg16::DI) = di;
             }
             break;
         }
         case 0xA7: // CMPS word
         {
             auto segment = segmentOverride == Reg16::AX ? Reg16::DS : segmentOverride;
+            int step = (flags & Flag_D) ? -2 : 2;
+
+            if(operandSize32)
+                step *= 2;
+
+            uint32_t si, di;
+            if(addressSize32)
+            {
+                si = reg(Reg32::ESI);
+                di = reg(Reg32::EDI);
+            }
+            else
+            {
+                si = reg(Reg16::SI);
+                di = reg(Reg16::DI);
+            }
+
             if(rep)
             {
                 cyclesExecuted(2 + 9);
 
-                while(reg(Reg16::CX))
+                uint32_t count = addressSize32 ? reg(Reg32::ECX) : reg(Reg16::CX);
+
+                while(count)
                 {
                     // TODO: interrupt
-
-                    auto src = readMem16(reg(Reg16::SI), getSegmentOffset(segment));
-                    auto dest = readMem16(reg(Reg16::DI), getSegmentOffset(Reg16::ES));
-
-                    doSub(src, dest, flags);
-
-                    if(flags & Flag_D)
+                    if(operandSize32)
                     {
-                        reg(Reg16::SI) -= 2;
-                        reg(Reg16::DI) -= 2;
+                        auto src = readMem32(si, getSegmentOffset(segment));
+                        auto dest = readMem32(di, getSegmentOffset(Reg16::ES));
+
+                        doSub(src, dest, flags);
                     }
                     else
                     {
-                        reg(Reg16::SI) += 2;
-                        reg(Reg16::DI) += 2;
+                        auto src = readMem16(si, getSegmentOffset(segment));
+                        auto dest = readMem16(di, getSegmentOffset(Reg16::ES));
+
+                        doSub(src, dest, flags);
                     }
 
-                    reg(Reg16::CX)--;
+                    si += step;
+                    di += step;
+
+                    if(!addressSize32)
+                    {
+                        si &= 0xFFFF;
+                        di &= 0xFFFF;
+                    }
+
+                    count--;
                     cyclesExecuted(22 + 2 * 4);
 
                     if(!!(flags & Flag_Z) != repZ)
                         break;
                 }
+
+                if(addressSize32)
+                    reg(Reg32::ECX) = count;
+                else
+                    reg(Reg16::CX) = count;
             }
             else
             {
-                auto src = readMem16(reg(Reg16::SI), getSegmentOffset(segment));
-                auto dest = readMem16(reg(Reg16::DI), getSegmentOffset(Reg16::ES));
-
-                doSub(src, dest, flags);
-
-                if(flags & Flag_D)
+                if(operandSize32)
                 {
-                    reg(Reg16::SI) -= 2;
-                    reg(Reg16::DI) -= 2;
+                    auto src = readMem32(si, getSegmentOffset(segment));
+                    auto dest = readMem32(di, getSegmentOffset(Reg16::ES));
+
+                    doSub(src, dest, flags);
                 }
                 else
                 {
-                    reg(Reg16::SI) += 2;
-                    reg(Reg16::DI) += 2;
+                    auto src = readMem16(si, getSegmentOffset(segment));
+                    auto dest = readMem16(di, getSegmentOffset(Reg16::ES));
+
+                    doSub(src, dest, flags);
                 }
 
+                si += step;
+                di += step;
+
                 cyclesExecuted(22 + 2 * 4);
+            }
+
+            if(addressSize32)
+            {
+                reg(Reg32::ESI) = si;
+                reg(Reg32::EDI) = di;
+            }
+            else
+            {
+                reg(Reg16::SI) = si;
+                reg(Reg16::DI) = di;
             }
             break;
         }
