@@ -807,6 +807,14 @@ void RAM_FUNC(CPU::executeInstruction)()
                             break;
                         }
 
+                        case 0x4: // SMSW
+                        {
+                            int cycles;
+                            writeRM16(modRM, reg(Reg32::CR0), cycles, addr + 1);
+                            reg(Reg32::EIP) += 2;
+                            break;
+                        }
+
                         default:
                             printf("op 0f 01 %02x @%05x\n", (int)exOp, addr);
                             exit(1);
