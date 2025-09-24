@@ -152,7 +152,7 @@ private:
     // internal state
 
     // registers
-    uint32_t regs[18]; // segment regs are only 16-bit...
+    uint32_t regs[19]; // segment regs are only 16-bit...
     uint32_t flags;
 
     SegmentDescriptor segmentDescriptorCache[6];
