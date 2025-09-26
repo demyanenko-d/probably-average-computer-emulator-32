@@ -4004,6 +4004,20 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0xF4: // HLT
         {
+            if(isProtectedMode())
+            {
+                unsigned cpl = (flags & Flag_VM) ? 3 : (reg(Reg16::CS) & 3);
+                if(cpl != 0)
+                {
+                    // GP
+                    // TODO: we need much more general fault handling
+                    reg(Reg32::EIP)--;
+                    serviceInterrupt(0xD);
+                    push(0, true); // error code
+                    break;
+                }
+            }
+
             if(!(flags & Flag_I))
                 printf("HALTED!\n");
 
