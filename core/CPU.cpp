@@ -780,6 +780,41 @@ void RAM_FUNC(CPU::executeInstruction)()
             auto opcode2 = readMem8(addr + 1);
             switch(opcode2)
             {
+                case 0x00:
+                {
+                    auto modRM = readMem8(addr + 2);
+                    auto exOp = (modRM >> 3) & 0x7;
+
+                    switch(exOp)
+                    {
+                        case 0x3: // LTR
+                        {
+                            assert(isProtectedMode());
+
+                            int cycles;
+                            auto selector = readRM16(modRM, cycles, addr + 1);
+
+                            auto &newDesc = getCachedSegmentDescriptor(Reg16::TR);
+                            newDesc = loadSegmentDescriptor(selector);
+
+                            assert(newDesc.flags & SD_Present); // present
+                            assert(!(newDesc.flags & SD_Type)); // system
+                            assert((newDesc.flags & SD_SysType) == 0x1 << 16 || (newDesc.flags & SD_SysType) == 0x9 << 16); // 16/32bit TSS
+
+                            // FIXME: set busy (sys type | 2)
+
+                            reg(Reg32::EIP) += 2;
+                            break;
+                        }
+
+                        default:
+                            printf("op 0f 00 %02x @%05x\n", (int)exOp, addr);
+                            exit(1);
+                            break;
+                    }
+
+                    break;
+                }
                 case 0x01:
                 {
                     auto modRM = readMem8(addr + 2);
