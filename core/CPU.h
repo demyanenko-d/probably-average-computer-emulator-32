@@ -102,6 +102,8 @@ private:
     void writeMem16(uint32_t offset, uint32_t segment, uint16_t data);
     void writeMem32(uint32_t offset, uint32_t segment, uint32_t data);
 
+    uint32_t getPhysicalAddress(uint32_t virtAddr);
+
     std::tuple<uint32_t, uint32_t> getEffectiveAddress(int mod, int rm, int &cycles, bool rw, uint32_t addr);
 
     SegmentDescriptor &getCachedSegmentDescriptor(Reg16 r) {return segmentDescriptorCache[static_cast<int>(r) - static_cast<int>(Reg16::ES)];}

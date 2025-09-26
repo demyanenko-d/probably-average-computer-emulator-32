@@ -4329,41 +4329,79 @@ void RAM_FUNC(CPU::executeInstruction)()
 
 uint8_t RAM_FUNC(CPU::readMem8)(uint32_t offset, uint32_t segment)
 {
-    return sys.readMem(offset + segment);
+    return sys.readMem(getPhysicalAddress(offset + segment));
 }
 
 uint16_t RAM_FUNC(CPU::readMem16)(uint32_t offset, uint32_t segment)
 {
-    return sys.readMem(offset + segment) | sys.readMem((offset + 1) + segment) << 8;
+    auto physAddr = getPhysicalAddress(offset + segment);
+    // FIXME: broken on page boundary
+    return sys.readMem(physAddr) | sys.readMem(physAddr + 1) << 8;
 }
 
 uint32_t RAM_FUNC(CPU::readMem32)(uint32_t offset, uint32_t segment)
 {
-    return sys.readMem(offset +     segment)       |
-           sys.readMem(offset + 1 + segment) <<  8 |
-           sys.readMem(offset + 2 + segment) << 16 |
-           sys.readMem(offset + 3 + segment) << 24;
+    auto physAddr = getPhysicalAddress(offset + segment);
+    return sys.readMem(physAddr + 0)       |
+           sys.readMem(physAddr + 1) <<  8 |
+           sys.readMem(physAddr + 2) << 16 |
+           sys.readMem(physAddr + 3) << 24;
 }
 
 void RAM_FUNC(CPU::writeMem8)(uint32_t offset, uint32_t segment, uint8_t data)
 {
-    sys.writeMem(offset + segment, data);
+    sys.writeMem(getPhysicalAddress(offset + segment), data);
 }
 
 void RAM_FUNC(CPU::writeMem16)(uint32_t offset, uint32_t segment, uint16_t data)
 {
-    sys.writeMem(offset + segment, data & 0xFF);
-    sys.writeMem(offset + 1 + segment, data >> 8);
+    auto physAddr = getPhysicalAddress(offset + segment);
+    sys.writeMem(physAddr, data & 0xFF);
+    sys.writeMem(physAddr + 1, data >> 8);
 }
 
 void RAM_FUNC(CPU::writeMem32)(uint32_t offset, uint32_t segment, uint32_t data)
 {
-    sys.writeMem(offset +     segment, data & 0xFF);
-    sys.writeMem(offset + 1 + segment, data >> 8);
-    sys.writeMem(offset + 2 + segment, data >> 16);
-    sys.writeMem(offset + 3 + segment, data >> 24);
+    auto physAddr = getPhysicalAddress(offset + segment);
+    sys.writeMem(physAddr + 0, data & 0xFF);
+    sys.writeMem(physAddr + 1, data >> 8);
+    sys.writeMem(physAddr + 2, data >> 16);
+    sys.writeMem(physAddr + 3, data >> 24);
 }
 
+uint32_t CPU::getPhysicalAddress(uint32_t virtAddr)
+{
+    // paging not enabled
+    if(!(reg(Reg32::CR0) & (1 << 31)))
+        return virtAddr;
+
+    auto dir = virtAddr >> 22;
+    auto page = (virtAddr >> 12) & 0x3FF;
+
+    // directory
+    auto dirEntryAddr = (reg(Reg32::CR3) & 0xFFFFF000) + dir * 4;
+    uint32_t dirEntry = sys.readMem(dirEntryAddr)
+                      | sys.readMem(dirEntryAddr + 1) << 8
+                      | sys.readMem(dirEntryAddr + 2) << 16
+                      | sys.readMem(dirEntryAddr + 3) << 24;
+
+    assert(dirEntry & 1); // FIXME: page fault
+
+    // page table
+    auto pageEntryAddr = (dirEntry & 0xFFFFF000) + page * 4;
+
+    uint32_t pageEntry = sys.readMem(pageEntryAddr)
+                       | sys.readMem(pageEntryAddr + 1) << 8
+                       | sys.readMem(pageEntryAddr + 2) << 16
+                       | sys.readMem(pageEntryAddr + 3) << 24;
+
+    assert(pageEntry & 1); // FIXME: page fault
+    // FIXME: check writable
+    // FIXME: check user/supervisor
+    // FIXME: set dirty/accessed
+
+    return (pageEntry & 0xFFFFF000) | (virtAddr & 0xFFF);
+}
 
 // rw is true if this is a write that was read in the same op (to avoid counting disp twice)
 // TODO: should addr cycles be counted twice?
