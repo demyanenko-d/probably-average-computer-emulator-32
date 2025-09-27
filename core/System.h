@@ -209,8 +209,10 @@ public:
         cycleCount += cycles * cpuClkDiv;
     }
 
+    void updateForInterrupts();
     void updateForInterrupts(uint8_t updateMask, uint8_t picMask);
 
+    void calculateNextInterruptCycle(uint32_t cycleCount);
     uint32_t getNextInterruptCycle() const {return nextInterruptCycle;}
 
     static constexpr int getClockSpeed() {return systemClock;}

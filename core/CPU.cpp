@@ -492,7 +492,7 @@ void RAM_FUNC(CPU::run)(int ms)
 
     while(sys.getCycleCount() - startCycleCount < cycles)
     {
-        //auto oldCycles = sys.getCycleCount();
+        auto oldCycles = sys.getCycleCount();
 
         if(chipset.needDMAUpdate())
             chipset.updateDMA();
@@ -511,11 +511,11 @@ void RAM_FUNC(CPU::run)(int ms)
         executeInstruction();
 
         // sync for interrupts
-        //uint32_t exec = sys.getCycleCount() - oldCycles;
+        uint32_t exec = sys.getCycleCount() - oldCycles;
 
-        //bool shouldUpdate = sys.getNextInterruptCycle() - oldCycles <= exec;
-        //if(shouldUpdate)
-        //    sys.updateForInterrupts();
+        bool shouldUpdate = sys.getNextInterruptCycle() - oldCycles <= exec;
+        if(shouldUpdate)
+            sys.updateForInterrupts();
     }
 }
 

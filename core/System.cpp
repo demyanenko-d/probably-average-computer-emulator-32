@@ -271,7 +271,7 @@ void Chipset::write(uint16_t addr, uint8_t data)
 
             pic[0].write(1, data);
 
-            // sys.calculateNextInterruptCycle(sys.getCycleCount()); // FIXME
+            sys.calculateNextInterruptCycle(sys.getCycleCount());
 
             break;
         }
@@ -316,7 +316,7 @@ void Chipset::write(uint16_t addr, uint8_t data)
                             pit.outState |= (1 << channel);
 
                         calculateNextPITUpdate();
-                        // sys.calculateNextInterruptCycle(sys.getCycleCount()); // FIXME
+                        sys.calculateNextInterruptCycle(sys.getCycleCount());
                     }
                 }
 
@@ -377,7 +377,7 @@ void Chipset::write(uint16_t addr, uint8_t data)
                 printf("PIT ch%i access %i mode %i\n", channel, access, mode);
 
                 calculateNextPITUpdate();
-                // sys.calculateNextInterruptCycle(sys.getCycleCount()); //FIXME
+                sys.calculateNextInterruptCycle(sys.getCycleCount());
             }
 
             break;
@@ -598,7 +598,7 @@ void Chipset::write(uint16_t addr, uint8_t data)
 
             pic[1].write(1, data);
 
-            // sys.calculateNextInterruptCycle(sys.getCycleCount()); // FIXME
+            sys.calculateNextInterruptCycle(sys.getCycleCount());
 
             break;
         }
@@ -1297,6 +1297,18 @@ void RAM_FUNC(System::writeIOPort16)(uint16_t addr, uint16_t data)
     printf("IO W %04X = %04X\n", addr, data);
 }
 
+void System::updateForInterrupts()
+{
+    auto mask = chipset.getPICMask();
+    for(auto &dev : ioDevices)
+    {
+        if((dev.picMask & ~mask))
+            dev.dev->updateForInterrupts(mask);
+    }
+
+    calculateNextInterruptCycle(getCycleCount());
+}
+
 void System::updateForInterrupts(uint8_t updateMask, uint8_t picMask)
 {
     for(auto &dev : ioDevices)
@@ -1304,4 +1316,20 @@ void System::updateForInterrupts(uint8_t updateMask, uint8_t picMask)
         if(dev.picMask & updateMask)
             dev.dev->updateForInterrupts(picMask);
     }
+}
+
+void System::calculateNextInterruptCycle(uint32_t cycleCount)
+{
+    int toUpdate = std::numeric_limits<int>::max();
+
+    auto mask = chipset.getPICMask();
+    for(auto &dev : ioDevices)
+    {
+        if((dev.picMask & ~mask))
+            toUpdate = std::min(toUpdate, dev.dev->getCyclesToNextInterrupt(cycleCount));
+    }
+
+    assert(toUpdate >= 0 || nextInterruptCycle == cycleCount + toUpdate);
+
+    nextInterruptCycle = cycleCount + toUpdate;
 }
