@@ -1196,7 +1196,7 @@ void RAM_FUNC(CPU::executeInstruction)()
                             int cycles;
 
                             if(operandSize32)
-                                value = readRM32(modRM, cycles, addr + 1, (bit / 32) * 4) & (1 << (bit & 32));
+                                value = readRM32(modRM, cycles, addr + 1, (bit / 32) * 4) & (1 << (bit & 31));
                             else
                                 value = readRM16(modRM, cycles, addr + 1, (bit / 16) * 2) & (1 << (bit & 15));
 
