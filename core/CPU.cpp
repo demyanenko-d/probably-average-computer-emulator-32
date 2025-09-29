@@ -2538,10 +2538,27 @@ void RAM_FUNC(CPU::executeInstruction)()
     
         case 0x9A: // CALL far
         {
-            auto newIP = readMem16(addr + 1);
-            auto newCS = readMem16(addr + 3);
+            uint32_t newIP;
+            uint16_t newCS;
 
-            farCall(newCS, newIP, reg(Reg32::EIP) + 4, operandSize32, stackAddrSize32);
+            int offset = 1;
+
+            if(operandSize32)
+            {
+                newIP = readMem32(addr + 1);
+                offset += 4;
+            }
+            else
+            {
+                newIP = readMem16(addr + 1);
+                offset += 2;
+            }
+
+            newCS = readMem16(addr + offset);
+
+            auto retAddr = reg(Reg32::EIP) + offset + 1 /*+2 for CS, -1 that was added by fetch*/;
+
+            farCall(newCS, newIP, retAddr, operandSize32, stackAddrSize32);
 
             cyclesExecuted(28 + 2 * 4);
             break;
@@ -4418,7 +4435,7 @@ void RAM_FUNC(CPU::executeInstruction)()
                     // need the addr again...
                     int cycleTmp;
                     auto [offset, segment] = getEffectiveAddress(modRM >> 6, modRM & 7, cycleTmp, true, addr);
-                    auto newCS = readMem16(offset + 2, segment);
+                    auto newCS = readMem16(offset + (operandSize32 ? 4 : 2), segment);
 
                     farCall(newCS, v, reg(Reg32::EIP) + 1, operandSize32, stackAddrSize32);
 
