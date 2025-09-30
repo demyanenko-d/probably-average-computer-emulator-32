@@ -893,7 +893,17 @@ void RAM_FUNC(CPU::executeInstruction)()
                             reg(Reg32::EIP) += 2;
                             break;
                         }
+                        case 0x1: // SIDT
+                        {
+                            int cycles;
+                            auto [offset, segment] = getEffectiveAddress(modRM >> 6, modRM & 7, cycles, false, addr + 1);
 
+                            writeMem16(offset, segment, idtLimit);
+                            writeMem32(offset + 2, segment, idtBase);
+
+                            reg(Reg32::EIP) += 2;
+                            break;
+                        }
                         case 0x2: // LGDT
                         {
                             int cycles;
@@ -906,7 +916,6 @@ void RAM_FUNC(CPU::executeInstruction)()
                             reg(Reg32::EIP) += 2;
                             break;
                         }
-
                         case 0x3: // LIDT
                         {
                             int cycles;
