@@ -3499,7 +3499,7 @@ void RAM_FUNC(CPU::executeInstruction)()
         case 0xC8: // ENTER
         {
             uint16_t allocSize = readMem16(addr + 1);
-            int nestingLevel = readMem8(addr + 2) % 32;
+            int nestingLevel = readMem8(addr + 3) % 32;
 
             push(reg(Reg32::EBP), operandSize32);
 
@@ -3508,13 +3508,17 @@ void RAM_FUNC(CPU::executeInstruction)()
             if(nestingLevel)
             {
                 auto bp = stackAddrSize32 ? reg(Reg32::EBP) : reg(Reg16::BP);
+                auto ss = getSegmentOffset(Reg16::SS);
                 for(int i = 0; i < nestingLevel - 1; i++)
                 {
                     bp -= (operandSize32 ? 4 : 2);
 
-                    uint32_t val = readMem16(bp);
+                    if(!stackAddrSize32)
+                        bp &= 0xFFFF;
+
+                    uint32_t val = readMem16(bp, ss);
                     if(operandSize32)
-                        val |= readMem16(bp + 2) << 16;
+                        val |= readMem16(bp + 2, ss) << 16;
 
                     push(val, operandSize32);
                 }
