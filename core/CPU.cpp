@@ -440,6 +440,8 @@ static T RAM_FUNC(doXor)(T dest, T src, uint32_t &flags)
 template<class T>
 static T RAM_FUNC(doShift)(int exOp, T dest, int count, uint32_t &flags)
 {
+    count &= 0x1F;
+
     switch(exOp)
     {
         case 0: // ROL
