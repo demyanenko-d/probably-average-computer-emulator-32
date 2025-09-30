@@ -938,6 +938,14 @@ void RAM_FUNC(CPU::executeInstruction)()
                             break;
                         }
 
+                        case 0x6: // LMSW
+                        {
+                            int cycles;
+                            reg(Reg32::CR0) = (reg(Reg32::CR0) & ~0xF) | (readRM16(modRM, cycles, addr + 1) & 0xF);
+                            reg(Reg32::EIP) += 2;
+                            break;
+                        }
+
                         default:
                             printf("op 0f 01 %02x @%05x\n", (int)exOp, addr);
                             exit(1);
