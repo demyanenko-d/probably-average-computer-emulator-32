@@ -1335,6 +1335,72 @@ void RAM_FUNC(CPU::executeInstruction)()
                             reg(Reg32::EIP) += 3;
                             break;
                         }
+                        case 5: // BTS
+                        {
+                            int bit = readMem8(addr + 3 + getDispLen(modRM, addr + 3));
+                            bool value;
+                            int cycles;
+
+                            if(operandSize32)
+                            {
+                                int off = (bit / 32) * 4;
+                                bit &= 31;
+
+                                auto data = readRM32(modRM, cycles, addr + 1, off);
+                                value = data & (1 << bit);
+                                writeRM32(modRM, data | 1 << bit, cycles, addr + 1, true, off);
+                            }
+                            else
+                            {
+                                int off = (bit / 16) * 2;
+                                bit &= 15;
+
+                                auto data = readRM16(modRM, cycles, addr + 1, off);
+                                value = data & (1 << bit);
+                                writeRM16(modRM, data | 1 << bit, cycles, addr + 1, true, off);
+                            }
+
+                            if(value)
+                                flags |= Flag_C;
+                            else
+                                flags &= ~Flag_C;
+
+                            reg(Reg32::EIP) += 3;
+                            break;
+                        }
+                        case 6: // BTR
+                        {
+                            int bit = readMem8(addr + 3 + getDispLen(modRM, addr + 3));
+                            bool value;
+                            int cycles;
+
+                            if(operandSize32)
+                            {
+                                int off = (bit / 32) * 4;
+                                bit &= 31;
+
+                                auto data = readRM32(modRM, cycles, addr + 1, off);
+                                value = data & (1 << bit);
+                                writeRM32(modRM, data & ~(1 << bit), cycles, addr + 1, true, off);
+                            }
+                            else
+                            {
+                                int off = (bit / 16) * 2;
+                                bit &= 15;
+
+                                auto data = readRM16(modRM, cycles, addr + 1, off);
+                                value = data & (1 << bit);
+                                writeRM16(modRM, data & ~(1 << bit), cycles, addr + 1, true, off);
+                            }
+
+                            if(value)
+                                flags |= Flag_C;
+                            else
+                                flags &= ~Flag_C;
+
+                            reg(Reg32::EIP) += 3;
+                            break;
+                        }
                         default:
                             printf("op 0f BA %x @%05x\n", (int)exOp, addr);
                             exit(1);
