@@ -521,6 +521,14 @@ void RAM_FUNC(CPU::run)(int ms)
     }
 }
 
+void CPU::updateFlags(uint32_t newFlags, uint32_t mask, bool is32)
+{
+    if(!is32)
+        mask &= 0xFFFF;
+
+    flags = (flags & ~mask) | (newFlags & mask);
+}
+
 void RAM_FUNC(CPU::executeInstruction)()
 {
     auto addr = getSegmentOffset(Reg16::CS) + (reg(Reg32::EIP)++);

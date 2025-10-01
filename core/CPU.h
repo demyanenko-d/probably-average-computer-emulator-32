@@ -86,6 +86,7 @@ public:
 
     uint16_t getFlags() const {return flags;}
     void setFlags(uint16_t flags) {this->flags = flags;}
+    void updateFlags(uint32_t newFlags, uint32_t mask, bool is32);
 
     void executeInstruction();
 
