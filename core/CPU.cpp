@@ -4205,7 +4205,10 @@ void RAM_FUNC(CPU::executeInstruction)()
         case 0xE3: // JCXZ
         {
             auto off = static_cast<int8_t>(readMem8(addr + 1));
-            if(reg(Reg16::CX) == 0)
+
+            auto val = addressSize32 ? reg(Reg32::ECX) : reg(Reg16::CX);
+
+            if(val == 0)
             {
                 setIP(reg(Reg32::EIP) + 1 + off);
                 cyclesExecuted(18);
