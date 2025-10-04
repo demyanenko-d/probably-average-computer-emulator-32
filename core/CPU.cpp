@@ -1673,6 +1673,40 @@ void RAM_FUNC(CPU::executeInstruction)()
                 doALU16AImm<doSub>(addr);
             break;
 
+        case 0x2F: // DAS
+        {
+            uint8_t val = reg(Reg8::AL);
+            bool carry = flags & Flag_C;
+            
+            flags &= ~Flag_C;
+
+            if((val & 0xF) > 9 || (flags & Flag_A))
+            {
+                if(val < 6)
+                    flags |= Flag_C;
+
+                val -= 6;
+
+                flags |= Flag_A;
+            }
+            else
+                flags &= ~Flag_A;
+
+            if(reg(Reg8::AL) > 0x99 || carry)
+            {
+                val -= 0x60;
+                flags |= Flag_C;
+            }
+
+            reg(Reg8::AL) = val;
+
+            flags = (flags & ~(Flag_P | Flag_Z | Flag_S))
+                  | (val == 0 ? Flag_Z : 0)
+                  | (val & 0x80 ? Flag_S : 0)
+                  | (parity(val) ? Flag_P : 0);
+            break;
+        }
+
         case 0x30: // XOR r/m8 r8
             doALU8<doXor, false, 3, 16>(addr);
             break;
@@ -1700,6 +1734,20 @@ void RAM_FUNC(CPU::executeInstruction)()
             else
                 doALU16AImm<doXor>(addr);
             break;
+
+        case 0x37: // AAA
+        {
+            if((reg(Reg8::AL) & 0xF) > 9 || (flags & Flag_A))
+            {
+                reg(Reg16::AX) += 0x106;
+                flags |= Flag_A | Flag_C;
+            }
+            else
+                flags &= ~(Flag_A | Flag_C);
+
+            reg(Reg8::AL) &= 0xF;
+            break;
+        }
 
         case 0x38: // CMP r/m8 r8
         {
@@ -1814,6 +1862,23 @@ void RAM_FUNC(CPU::executeInstruction)()
                 reg(Reg32::EIP) += 2;
             }
             cyclesExecuted(4);
+            break;
+        }
+
+        case 0x3F: // AAS
+        {
+            if((reg(Reg8::AL) & 0xF) > 9 || (flags & Flag_A))
+            {
+                reg(Reg16::AX) -= 6;
+                reg(Reg8::AH) -= 1;
+
+                flags |= Flag_A | Flag_C;
+            }
+            else
+                flags &= ~(Flag_A | Flag_C);
+
+            reg(Reg8::AL) &= 0xF;
+
             break;
         }
 
