@@ -4188,13 +4188,22 @@ void RAM_FUNC(CPU::executeInstruction)()
         case 0xDE:
         case 0xDF:
         {
-            auto modRM = readMem8(addr + 1);
+            if(reg(Reg32::CR0) & (1 << 2)/*EM*/)
+            {
+                // NM
+                reg(Reg32::EIP)--;
+                serviceInterrupt(0x7);
+            }
+            else
+            {
+                auto modRM = readMem8(addr + 1);
 
-            int cycles = ((modRM >> 6) == 3 ? 2 : 8);
-            readRM8(modRM, cycles, addr); // we need to at least decode it
+                int cycles = ((modRM >> 6) == 3 ? 2 : 8);
+                readRM8(modRM, cycles, addr); // we need to at least decode it
 
-            reg(Reg32::EIP)++;
-            cyclesExecuted(cycles);
+                reg(Reg32::EIP)++;
+                cyclesExecuted(cycles);
+            }
             break;
         }
 
