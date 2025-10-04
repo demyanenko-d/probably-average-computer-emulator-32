@@ -412,9 +412,6 @@ int main(int argc, char *argv[])
     int textureHeight = 480;
     int screenScale = 2;
 
-    uint32_t timeToRun = 0;
-    bool timeLimit = false;
-
     std::string biosPath = "bios.bin";
     std::string floppyPaths[FileFloppyIO::maxDrives];
     std::string ataPaths[FileATAIO::maxDrives];
@@ -427,13 +424,6 @@ int main(int argc, char *argv[])
 
         if(arg == "--scale" && i + 1 < argc)
             screenScale = std::stoi(argv[++i]);
-        else if(arg == "--turbo")
-            turbo = true;
-        else if(arg == "--time" && i + 1 < argc)
-        {
-            timeLimit = true;
-            timeToRun = std::stoi(argv[++i]) * 1000;
-        }
         else if(arg == "--bios" && i + 1 < argc)
             biosPath = argv[++i];
         else if(arg.compare(0, 8, "--floppy") == 0 && arg.length() == 9 && i + 1 < argc)
@@ -537,8 +527,7 @@ int main(int argc, char *argv[])
                                    SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
 
     auto renderer = SDL_CreateRenderer(window, nullptr);
-    if(!turbo)
-        SDL_SetRenderVSync(renderer, 1);
+    SDL_SetRenderVSync(renderer, 1);
     SDL_SetRenderLogicalPresentation(renderer, screenWidth, screenHeight, SDL_LOGICAL_PRESENTATION_INTEGER_SCALE);
 
     auto texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_XBGR8888, SDL_TEXTUREACCESS_STREAMING, textureWidth, textureHeight);
@@ -559,29 +548,12 @@ int main(int argc, char *argv[])
         quit = true;
     }
 
-    if(!turbo)
-        SDL_ResumeAudioStreamDevice(audioStream);
+    SDL_ResumeAudioStreamDevice(audioStream);
 
     // timer
     SDL_AddTimerNS(838, systemTimerCallback, &sys); // ~1.193MHz
 
     auto lastTick = SDL_GetTicks();
-    auto startTime = SDL_GetTicks();
-
-    auto checkTimeLimit = [timeLimit, &timeToRun]()
-    {
-        // fixed length benchmark
-        if(timeLimit)
-        {
-            timeToRun -= 10;
-            if(timeToRun == 0)
-            {
-                quit = true;
-                return true;
-            }
-        }
-        return false;
-    };
 
     while(!quit)
     {
@@ -589,25 +561,8 @@ int main(int argc, char *argv[])
 
         auto now = SDL_GetTicks();
 
-        if(turbo)
-        {
-            // push as fast as possible
-            // avoid doing SDL stuff between updates
-            while(now - lastTick < 10)
-            {
-                cpu.run(10);
-
-                now = SDL_GetTicks();
-
-                if(checkTimeLimit())
-                    break;
-            }
-        }
-        else
-        {
-            int step = std::min(15, int(now - lastTick));
-            cpu.run(step);
-        }
+        int step = std::min(15, int(now - lastTick));
+        cpu.run(step);
 
         sys.getChipset().updateForDisplay(); // this just tries to make sure the PIT doesn't get too far behind
 
@@ -628,12 +583,6 @@ int main(int argc, char *argv[])
         SDL_FRect srcRect{0, 0, float(outputW), float(outputH)};
         SDL_RenderTexture(renderer, texture, &srcRect, nullptr);
         SDL_RenderPresent(renderer);
-    }
-
-    if(timeLimit)
-    {
-        auto runTime = SDL_GetTicks() - startTime;
-        printf("Ran for %ums\n", runTime);
     }
 
     SDL_DestroyAudioStream(audioStream);
