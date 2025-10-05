@@ -3025,7 +3025,11 @@ void RAM_FUNC(CPU::executeInstruction)()
 
             // with 32bit operand size writing to mem still only writes 16 bits
             // writing to reg leaves high 16 bits undefined
-            writeRM16(modRM, reg(srcReg), cycles, addr);
+            // ... but seabios relies on the newer behaviour of zeroing the high bits...
+            if(operandSize32 && (modRM >> 6) == 3)
+                reg(static_cast<Reg32>(modRM & 7)) = reg(srcReg);
+            else
+                writeRM16(modRM, reg(srcReg), cycles, addr);
 
             reg(Reg32::EIP)++;
             cyclesExecuted(cycles);
