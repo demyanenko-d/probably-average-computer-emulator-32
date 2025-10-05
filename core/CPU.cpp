@@ -4847,7 +4847,7 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                     int res = v == 0 ? 0xFF : num / iv;
 
-                    if(res > 0x7F || res < -0x7F)
+                    if(res > 0x7F || res < -0x80)
                     {
                         // fault
                         reg(Reg32::EIP)++;
@@ -5045,7 +5045,7 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                         int64_t res = v == 0 ? 0xFFFFFFFF : num / iv;
 
-                        if(res > 0x7FFFFFFF || res < -0x7FFFFFFF)
+                        if(res > 0x7FFFFFFF || res < -0x80000000ll)
                         {
                             // fault
                             reg(Reg32::EIP)++;
@@ -5067,7 +5067,7 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                         int res = v == 0 ? 0xFFFF : num / iv;
 
-                        if(res > 0x7FFF || res < -0x7FFF)
+                        if(res > 0x7FFF || res < -0x8000)
                         {
                             // fault
                             reg(Reg32::EIP)++;
