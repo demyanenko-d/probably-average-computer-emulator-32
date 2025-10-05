@@ -5669,6 +5669,10 @@ std::tuple<uint32_t, uint32_t> RAM_FUNC(CPU::getEffectiveAddress)(int mod, int r
 
 CPU::SegmentDescriptor CPU::loadSegmentDescriptor(uint16_t selector)
 {
+    // null descriptor
+    if(!selector)
+        return {};
+
     SegmentDescriptor desc;
 
     //int privLevel = selector & 3;
