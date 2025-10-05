@@ -5994,7 +5994,10 @@ void CPU::doALU32AImm(uint32_t addr)
 void CPU::doPush(uint32_t val, bool op32, bool addr32)
 {
     uint32_t sp = addr32 ? reg(Reg32::ESP) : reg(Reg16::SP);
-    sp -= op32 ? 4 : 2;
+    if(sp == 0 && !addr32)
+        sp = op32 ? 0xFFFC : 0xFFFE; // 16-bit wrap if SP was 0
+    else
+        sp -= op32 ? 4 : 2;
 
     if(op32)
         writeMem32(sp, getSegmentOffset(Reg16::SS), val);
