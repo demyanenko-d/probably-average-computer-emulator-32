@@ -323,6 +323,33 @@ static T RAM_FUNC(doShiftLeft)(T dest, int count, uint32_t &flags)
 }
 
 template<class T>
+static T RAM_FUNC(doDoubleShiftLeft)(T dest, T src, int count, uint32_t &flags)
+{
+    if(!count)
+        return dest;
+
+    int maxBits = sizeof(T) * 8;
+
+    bool carry = count > maxBits ? 0 : dest & (1 << (maxBits - count));
+
+    T res = count >= maxBits ? 0 : dest << count;
+
+    // shift in from src
+    res |= src >> (maxBits - count);
+
+    flags = (flags & ~(Flag_C | Flag_P | Flag_Z | Flag_S))
+          | (carry ? Flag_C : 0)
+          | (parity(res) ? Flag_P : 0)
+          | (res == 0 ? Flag_Z : 0)
+          | (res & signBit<T>() ? Flag_S : 0);
+
+    // "undefined" for shift counts other than 1
+    flags = (flags & ~Flag_O) | (!!(res & signBit<T>()) != carry ? Flag_O : 0); // msb of result != carry flag
+
+    return res;
+}
+
+template<class T>
 static T RAM_FUNC(doShiftRight)(T dest, int count, uint32_t &flags)
 {
     if(!count)
@@ -1153,6 +1180,57 @@ void RAM_FUNC(CPU::executeInstruction)()
                         flags |= Flag_C;
                     else
                         flags &= ~Flag_C;
+
+                    reg(Reg32::EIP) += 2;
+                    break;
+                }
+
+                case 0xA4: // SHLD by imm
+                {
+                    auto modRM = readMem8(addr + 2);
+                    auto r = (modRM >> 3) & 0x7;
+
+                    auto count = readMem8(addr + 3 + getDispLen(modRM, addr + 3)) & 0x1F;
+
+                    int cycles;
+ 
+                    if(operandSize32)
+                    {
+                        auto v = readRM32(modRM, cycles, addr + 1);
+                        auto src = reg(static_cast<Reg32>(r));
+                        writeRM32(modRM, doDoubleShiftLeft(v, src, count, flags), cycles, addr + 1, true);
+                    }
+                    else
+                    {
+                        auto v = readRM16(modRM, cycles, addr + 1);
+                        auto src = reg(static_cast<Reg16>(r));
+                        writeRM16(modRM, doDoubleShiftLeft(v, src, count, flags), cycles, addr + 1, true);
+                    }
+
+                    reg(Reg32::EIP) += 3;
+                    break;
+                }
+                case 0xA5: // SHLD by CL
+                {
+                    auto modRM = readMem8(addr + 2);
+                    auto r = (modRM >> 3) & 0x7;
+
+                    auto count = reg(Reg8::CL) & 0x1F;
+
+                    int cycles;
+
+                    if(operandSize32)
+                    {
+                        auto v = readRM32(modRM, cycles, addr + 1);
+                        auto src = reg(static_cast<Reg32>(r));
+                        writeRM32(modRM, doDoubleShiftLeft(v, src, count, flags), cycles, addr + 1, true);
+                    }
+                    else
+                    {
+                        auto v = readRM16(modRM, cycles, addr + 1);
+                        auto src = reg(static_cast<Reg16>(r));
+                        writeRM16(modRM, doDoubleShiftLeft(v, src, count, flags), cycles, addr + 1, true);
+                    }
 
                     reg(Reg32::EIP) += 2;
                     break;
