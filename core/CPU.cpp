@@ -3714,43 +3714,76 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0xAF: // SCAS word
         {
+            int step = (flags & Flag_D) ? -2 : 2;
+
+            if(operandSize32)
+                step *= 2;
+
+            uint32_t di;
+            if(addressSize32)
+                di = reg(Reg32::EDI);
+            else
+                di = reg(Reg16::DI);
+
             if(rep)
             {
                 cyclesExecuted(2 + 9);
 
-                while(reg(Reg16::CX))
+                uint32_t count = addressSize32 ? reg(Reg32::ECX) : reg(Reg16::CX);
+
+                while(count)
                 {
                     // TODO: interrupt
-
-                    auto rSrc = readMem16(reg(Reg16::DI), getSegmentOffset(Reg16::ES));
-
-                    doSub(reg(Reg16::AX), rSrc, flags);
-
-                    if(flags & Flag_D)
-                        reg(Reg16::DI) -= 2;
+                    if(operandSize32)
+                    {
+                        auto rSrc = readMem32(di, getSegmentOffset(Reg16::ES));
+                        doSub(reg(Reg32::EAX), rSrc, flags);
+                    }
                     else
-                        reg(Reg16::DI) += 2;
+                    {
+                        auto rSrc = readMem16(di, getSegmentOffset(Reg16::ES));
+                        doSub(reg(Reg16::AX), rSrc, flags);
+                    }
 
-                    reg(Reg16::CX)--;
+                    di += step;
+
+                    if(!addressSize32)
+                        di &= 0xFFFF;
+    
+                    count--;
                     cyclesExecuted(15 + 4);
 
                     if(!!(flags & Flag_Z) != repZ)
                         break;
                 }
+
+                if(addressSize32)
+                    reg(Reg32::ECX) = count;
+                else
+                    reg(Reg16::CX) = count;
             }
             else
             {
-                auto rSrc = readMem16(reg(Reg16::DI), getSegmentOffset(Reg16::ES));
-
-                doSub(reg(Reg16::AX), rSrc, flags);
-
-                if(flags & Flag_D)
-                    reg(Reg16::DI) -= 2;
+                if(operandSize32)
+                {
+                    auto rSrc = readMem32(di, getSegmentOffset(Reg16::ES));
+                    doSub(reg(Reg32::EAX), rSrc, flags);
+                }
                 else
-                    reg(Reg16::DI) += 2;
+                {
+                    auto rSrc = readMem16(di, getSegmentOffset(Reg16::ES));
+                    doSub(reg(Reg16::AX), rSrc, flags);
+                }
+
+                di += step;
 
                 cyclesExecuted(15 + 4);
             }
+
+            if(addressSize32)
+                reg(Reg32::EDI) = di;
+            else
+                reg(Reg16::DI) = di;
             break;
         }
 
