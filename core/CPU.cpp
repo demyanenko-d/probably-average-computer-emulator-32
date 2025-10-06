@@ -1839,16 +1839,16 @@ void RAM_FUNC(CPU::executeInstruction)()
         case 0x27: // DAA
         {
             int val = reg(Reg8::AL);
+            bool carry = flags & Flag_C;
 
-            int cmp2 = (flags & Flag_A) ? 0x9F : 0x99; // I don't know why this is right, but it is?
-
-            if((reg(Reg8::AL) & 0xF) > 9 || (flags & Flag_A))
+            if((val & 0xF) > 9 || (flags & Flag_A))
             {
                 reg(Reg8::AL) += 6;
+                // set C?
                 flags |= Flag_A;
             }
 
-            if(val > cmp2 || (flags & Flag_C))
+            if(val > 0x99 || carry)
             {
                 reg(Reg8::AL) += 0x60;
                 flags |= Flag_C;
