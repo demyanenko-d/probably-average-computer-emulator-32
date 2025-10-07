@@ -4412,9 +4412,6 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                     setSegmentReg(Reg16::SS, newSS);
                     reg(Reg32::ESP) = newESP;
-
-                    // back to 16-bit mode?
-                    getCachedSegmentDescriptor(Reg16::CS).flags &= ~SD_Size;
                 }
                 else if((newCS & 3) > cpl)
                 {
@@ -4842,7 +4839,8 @@ void RAM_FUNC(CPU::executeInstruction)()
                     // TODO: we need much more general fault handling
                     reg(Reg32::EIP)--;
                     serviceInterrupt(0xD);
-                    push(0, true); // error code
+                    // might have changed the stack address size
+                    doPush(0, true, isStackAddressSize32()); // error code
                     break;
                 }
             }
@@ -5764,7 +5762,7 @@ std::tuple<uint32_t, uint16_t> CPU::getTSSStackPointer(int dpl)
 // also address size, but with a different override prefix
 bool CPU::isOperandSize32(bool override)
 {
-    if(isProtectedMode())
+    if(isProtectedMode() && !(flags & Flag_VM))
     {
         // D bit in CS descriptor
         bool ret = getCachedSegmentDescriptor(Reg16::CS).flags & SD_Size;
@@ -5781,7 +5779,7 @@ bool CPU::isOperandSize32(bool override)
 
 bool CPU::isStackAddressSize32()
 {
-    if(isProtectedMode())
+    if(isProtectedMode() && !(flags & Flag_VM))
     {
         // B bit in SS descriptor
         // (same bit as D)
@@ -6072,7 +6070,7 @@ void RAM_FUNC(CPU::serviceInterrupt)(uint8_t vector)
 {
     bool stackAddrSize32 = isStackAddressSize32();
 
-    auto push = [this, stackAddrSize32](uint32_t val, bool is32)
+    auto push = [this, &stackAddrSize32](uint32_t val, bool is32)
     {
         doPush(val, is32, stackAddrSize32);
     };
@@ -6123,6 +6121,11 @@ void RAM_FUNC(CPU::serviceInterrupt)(uint8_t vector)
 
                 setSegmentReg(Reg16::SS, newSS);
                 reg(Reg32::ESP) = newSP;
+
+                assert(gate32);
+
+                // restore stack address size
+                stackAddrSize32 = isStackAddressSize32();
 
                 // big pile of extra pushes
                 push(reg(Reg16::GS), true);
