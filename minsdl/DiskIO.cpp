@@ -82,6 +82,11 @@ uint32_t FileATAIO::getNumSectors(int drive)
     return numSectors[drive];
 }
 
+bool FileATAIO::isATAPI(int drive)
+{
+    return false; // TODO
+}
+
 bool FileATAIO::read(int drive, uint8_t *buf, uint32_t lba)
 {
     if(drive >= maxDrives)

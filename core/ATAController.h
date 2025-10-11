@@ -8,6 +8,8 @@ public:
     // returns 0 if no drive present
     virtual uint32_t getNumSectors(int device) = 0;
 
+    virtual bool isATAPI(int drive) = 0;
+
     // reads a 512 byte sector
     virtual bool read(int device, uint8_t *buf, uint32_t lba) = 0;
 

@@ -26,6 +26,9 @@ class FileATAIO final : public ATADiskIO
 {
 public:
     uint32_t getNumSectors(int drive) override;
+    
+    virtual bool isATAPI(int drive) override;
+
     bool read(int drive, uint8_t *buf, uint32_t lba) override;
     bool write(int drive, const uint8_t *buf, uint32_t lba) override;
 

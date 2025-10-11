@@ -144,7 +144,8 @@ void ATAController::write(uint16_t addr, uint8_t data)
             break;
         case 0x176: // device/head
             deviceHead = data;
-            status |= Status_DRDY; // for non-ATAPI
+            if(!io || !io->isATAPI((deviceHead >> 4) & 1))
+                status |= Status_DRDY; // non-ATAPI is automatically ready
             break;
         case 0x177: // command
         {
@@ -222,12 +223,13 @@ void ATAController::write(uint16_t addr, uint8_t data)
                 }
                 // ATAPI
                 case ATACommand::PACKET:
-                case ATACommand::IDENTIFY_PACKET_DEVICE:
+                    if(io && io->isATAPI(dev))
+                        printf("ATAPI packet len %04X\n", lbaMidCylinderLow | lbaHighCylinderHigh << 8);
                     status |= Status_ERR;
                     break;
 
-                case ATACommand::IDENTIFY_DEVICE:
-                    if(io && io->getNumSectors(dev))
+                case ATACommand::IDENTIFY_PACKET_DEVICE:
+                    if(io && io->isATAPI(dev))
                     {
                         fillIdentity(dev);
 
@@ -235,6 +237,25 @@ void ATAController::write(uint16_t addr, uint8_t data)
                         bufOffset = 0;
                         status &= ~Status_DRDY;
                         status |= Status_DRQ;
+                    }
+                    else
+                        status |= Status_ERR;
+                    break;
+
+                case ATACommand::IDENTIFY_DEVICE:
+                    if(io && io->getNumSectors(dev))
+                    {
+                        if(io->isATAPI(dev))
+                            status |= Status_ERR;
+                        else
+                        {
+                            fillIdentity(dev);
+
+                            pioReadLen = 512;
+                            bufOffset = 0;
+                            status &= ~Status_DRDY;
+                            status |= Status_DRQ;
+                        }
                     }
 
                     break;
@@ -352,16 +373,26 @@ void ATAController::calculateCHS(int device)
 
 void ATAController::fillIdentity(int device)
 {
-    calculateCHS(device);
+    bool atapi = io->isATAPI(device);
 
     // clear the buffer
     memset(sectorBuf, 0, sizeof(sectorBuf));
 
     auto wordBuf = reinterpret_cast<uint16_t *>(sectorBuf);
 
-    wordBuf[1] = numCylinders[device];
-    wordBuf[3] = numHeads[device];
-    wordBuf[6] = sectorsPerTrack[device];
+    if(atapi)
+    {
+        wordBuf[0] = 1 << 15  // ATAPI
+                   | 5 <<  8; // command set
+    }
+    else
+    {
+        calculateCHS(device);
+
+        wordBuf[1] = numCylinders[device];
+        wordBuf[3] = numHeads[device];
+        wordBuf[6] = sectorsPerTrack[device];
+    }
 
     // serial number
     for(int i = 0; i < 20; i++)
@@ -377,17 +408,21 @@ void ATAController::fillIdentity(int device)
     for(unsigned i = 0; i < strlen(model); i += 2)
         wordBuf[27 + i / 2] = model[i] << 8 | model[i + 1];
 
-    wordBuf[47] = 1; // max sectors for read/write multiple
+    if(!atapi)
+        wordBuf[47] = 1; // max sectors for read/write multiple
 
     wordBuf[49] = 1 << 9/*LBA*/; // TODO: bit 8 for DMA
 
-    // LBA mode sectors
-    uint32_t sectors = io->getNumSectors(device);
+    if(!atapi)
+    {
+        // LBA mode sectors
+        uint32_t sectors = io->getNumSectors(device);
 
-    wordBuf[60] = sectors & 0xFFFF;
-    wordBuf[61] = sectors >> 16;
+        wordBuf[60] = sectors & 0xFFFF;
+        wordBuf[61] = sectors >> 16;
+    }
 
-    wordBuf[80] = ((1 << 3) - 1) << 1; // ATA-3
+    wordBuf[80] = ((1 << 4) - 1) << 1; // ATA-4 (earliest ver with ATAPI)
 
     // 82-84 for command sets
 }
