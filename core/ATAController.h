@@ -59,7 +59,7 @@ private:
 
     uint8_t deviceControl;
 
-    uint8_t sectorBuf[512];
+    uint8_t sectorBuf[2048];
     int bufOffset = 0;
 
     int pioReadLen = 0;

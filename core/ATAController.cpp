@@ -582,6 +582,41 @@ void ATAController::doATAPICommand(int device)
             break;
         }
 
+        case SCSICommand::READ_10:
+        {
+            uint32_t lba = sectorBuf[2] << 24 | sectorBuf[3] << 16 | sectorBuf[4] << 8 | sectorBuf[5];
+            uint16_t numSectors = sectorBuf[7] << 8 | sectorBuf[8];
+
+            auto limit = lbaMidCylinderLow | lbaHighCylinderHigh << 8;
+
+            assert(limit == numSectors * 2048);
+
+            if(io && io->read(device, sectorBuf, lba))
+            {
+                pioReadLen = 2048;
+                pioReadSectors = numSectors;
+                bufOffset = 0;
+                curLBA = lba;
+
+
+                status &= ~Status_DRDY;
+                status |= Status_DRQ;
+
+                sectorCount = (0 << 0)  // data
+                            | (1 << 1); // to host
+            }
+            else
+            {
+                // error
+                status |= Status_ERR; // ATAPI CHK bit
+
+                sectorCount = (1 << 0)  // command
+                            | (1 << 1); // to host
+            }
+
+            break;
+        }
+
         case SCSICommand::READ_TOC:
         {
             // bool msf = sectorBuf[1] & (1 << 1);
