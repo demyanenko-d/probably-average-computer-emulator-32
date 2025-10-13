@@ -760,9 +760,6 @@ void Chipset::flagPICInterrupt(int index)
     int picIndex = index / 8;
     index &= 7;
 
-    if(pic[picIndex].mask & (1 << index))
-        return;
-
     pic[picIndex].request |= 1 << index;
 }
 
