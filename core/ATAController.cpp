@@ -1,3 +1,4 @@
+#include <cassert>
 #include <cstdio>
 #include <cstring>
 
@@ -29,6 +30,7 @@ enum class SCSICommand
     REQUEST_SENSE   = 0x03,
     INQUIRY         = 0x12,
     READ_10         = 0x28,
+    READ_TOC        = 0x43,
 };
 
 enum class SCSISenseKey
@@ -569,6 +571,46 @@ void ATAController::doATAPICommand(int device)
             memcpy(sectorBuf + 8, vendor, 8);
             memcpy(sectorBuf + 16, product, 16);
             memcpy(sectorBuf + 32, revision, 4);
+
+            status &= ~Status_DRDY;
+            status |= Status_DRQ;
+
+            sectorCount = (0 << 0)  // data
+                        | (1 << 1); // to host
+
+            flagIRQ();
+            break;
+        }
+
+        case SCSICommand::READ_TOC:
+        {
+            // bool msf = sectorBuf[1] & (1 << 1);
+            int format = sectorBuf[2] & 0xF;
+            // uint8_t trackSession = sectorBuf[6];
+
+            pioReadLen = lbaMidCylinderLow | lbaHighCylinderHigh << 8; // requested len
+            pioReadSectors = 0;
+            bufOffset = 0;
+
+            assert(format == 0);
+            assert(pioReadLen == 12);
+
+            // data
+            if(format == 0)
+            {
+                // claim we have one data track
+                sectorBuf[0] = 0;
+                sectorBuf[1] = 10; // data length
+
+                sectorBuf[2] = sectorBuf[3] = 1; // first/last track
+
+                // track descriptor
+                sectorBuf[4] = 0; // reserved
+                sectorBuf[5] = 0x14; // ADR = position data, CONTROL = data track
+                sectorBuf[6] = 1; // track number
+                sectorBuf[7] = 0; // reserved
+                sectorBuf[8] = sectorBuf[9] = sectorBuf[10] = sectorBuf[11] = 0; // LBA
+            }
 
             status &= ~Status_DRDY;
             status |= Status_DRQ;
