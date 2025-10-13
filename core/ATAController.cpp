@@ -26,8 +26,27 @@ enum class ATACommand
 enum class SCSICommand
 {
     TEST_UNIT_READY = 0x00,
+    REQUEST_SENSE   = 0x03,
     INQUIRY         = 0x12,
     READ_10         = 0x28,
+};
+
+enum class SCSISenseKey
+{
+    NO_SENSE        = 0x0,
+    RECOVERED_ERROR = 0x1,
+    NOT_READY       = 0x2,
+    MEDIUM_ERROR    = 0x3,
+    HARDWARE_ERROR  = 0x4,
+    ILLEGAL_REQUEST = 0x5,
+    UNIT_ATTENTION  = 0x6,
+    DATA_PROTECT    = 0x7,
+    BLANK_CHECK     = 0x8,
+    VENDOR_SPECIFIC = 0x9,
+    COPY_ABORTED    = 0xA,
+    ABORTED_COMMAND = 0xB,
+    VOLUME_OVERFLOW = 0xD,
+    MISCOMPARE      = 0xE,
 };
 
 ATAController::ATAController(System &sys) : sys(sys)
@@ -494,6 +513,35 @@ void ATAController::doATAPICommand(int device)
             sectorCount = 1 << 0  // command
                         | 1 << 1; // to host
             
+            flagIRQ();
+            break;
+        }
+
+        case SCSICommand::REQUEST_SENSE:
+        {
+            [[maybe_unused]] bool desc = sectorBuf[1] & 1;
+            assert(!desc);
+
+            pioReadLen = lbaMidCylinderLow | lbaHighCylinderHigh << 8; // requested len
+            pioReadSectors = 0;
+            bufOffset = 0;
+
+            sectorBuf[0] = 1 << 7 | 0x70; // valid, current error
+            sectorBuf[1] = static_cast<uint8_t>(SCSISenseKey::ILLEGAL_REQUEST); // so far we only return an error if the command is not supported
+
+            sectorBuf[7] = 0; // no additional length
+            
+            sectorBuf[12] = 0x20; // additional code
+            sectorBuf[13] = 0; // ... qualifier
+            sectorBuf[14] = 0; // "field replaceable unit code"
+            sectorBuf[15] = 0; // no key specific data
+    
+            status &= ~Status_DRDY;
+            status |= Status_DRQ;
+
+            sectorCount = (0 << 0)  // data
+                        | (1 << 1); // to host
+
             flagIRQ();
             break;
         }
