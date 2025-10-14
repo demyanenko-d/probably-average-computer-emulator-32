@@ -400,7 +400,10 @@ void Chipset::write(uint16_t addr, uint8_t data)
                     i8042Configuration = data;
                 }
                 else if(i8042ControllerCommand == 0xD1)
+                {
                     printf("8042 output %02X\n", data);
+                    i8042OutputPort = data;
+                }
 
                 i8042ControllerCommand = 0;
                 break;
@@ -534,6 +537,9 @@ void Chipset::write(uint16_t addr, uint8_t data)
         {
             switch(data)
             {
+                case 0x20: // read config
+                    i8042Queue.push(i8042Configuration);
+                    break;
                 case 0x60: // write config byte
                 case 0xD1: // write output port
                     i8042ControllerCommand = data;
@@ -556,6 +562,9 @@ void Chipset::write(uint16_t addr, uint8_t data)
                     break;
                 case 0xAE: // enable first port
                     i8042PortEnabled |= (1 << 0);
+                    break;
+                case 0xD0: // read output port
+                    i8042Queue.push(i8042OutputPort);
                     break;
                 case 0xD4: // next byte to second port
                     i8042WriteSecondPort = true;

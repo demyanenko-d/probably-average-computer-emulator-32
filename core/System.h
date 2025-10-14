@@ -152,6 +152,7 @@ private:
     uint8_t i8042PortEnabled = 0;
     uint8_t i8042Configuration = 0;
     uint8_t i8042DeviceSendEnabled = 0;
+    uint8_t i8042OutputPort = 0;
     bool i8042WriteSecondPort = false;
 
     uint8_t mouseButtons = 0;
