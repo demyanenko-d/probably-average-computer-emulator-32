@@ -5750,91 +5750,97 @@ CPU::SegmentDescriptor CPU::loadSegmentDescriptor(uint16_t selector)
     return desc;
 }
 
-bool CPU::setSegmentReg(Reg16 r, uint16_t value)
+// if this returns false we faulted
+bool CPU::checkSegmentSelector(Reg16 r, uint16_t value)
 {
-    if(isProtectedMode() && !(flags & Flag_VM))
-    {
-        // check limit
-        // TODO: move this down to loadSegmentDescriptor?
-        // (would require it to be able to fail, and a few callers don't want the faults)
-        auto limit = (value & 4)/*local*/ ? ldtLimit : gdtLimit;
+    // check limit
+    auto limit = (value & 4)/*local*/ ? ldtLimit : gdtLimit;
 
-        // effectively (selector >> 3) * 8 + 7
-        if((value | 7) > limit)
+    // effectively (selector >> 3) * 8 + 7
+    if((value | 7) > limit)
+    {
+        // bottom 3 bits don't match but clearing the last two gets us the right thing
+        fault(Fault::GP, value & ~3);
+        return false;
+    }
+
+    if(value < 4) // NULL selector
+    {
+        // not valid for CS/SS
+        if(r == Reg16::CS || r == Reg16::SS)
         {
-            // bottom 3 bits don't match but clearing the last two gets us the right thing
             fault(Fault::GP, value & ~3);
             return false;
         }
 
-        if(value < 4) // NULL selector
-        {
-            // not valid for CS/SS
-            if(r == Reg16::CS || r == Reg16::SS)
-            {
-                fault(Fault::GP, value & ~3);
-                return false;
-            }
+        return true;
+    }
 
-            getCachedSegmentDescriptor(r) = {};
-        }
+    // TODO: just get flags?
+    auto desc = loadSegmentDescriptor(value);
+
+    // not present
+    if(!(desc.flags & SD_Present))
+    {
+        if(r == Reg16::SS)
+            fault(Fault::SS, value & ~3);
         else
+            fault(Fault::NP, value & ~3);
+        return false;
+    }
+
+    // check data/code
+    // (CS could be a gate but we'll handle that in the call op)
+    if(!(desc.flags & SD_Type))
+    {
+        fault(Fault::GP, value & ~3);
+        return false;
+    }
+
+    unsigned rpl = value & 3;
+    unsigned dpl = (desc.flags & SD_PrivilegeLevel) >> 21;
+
+    if(r == Reg16::CS)
+    {
+        // TODO
+    }
+    else if(r == Reg16::SS)
+    {
+        // check privileges
+        if(rpl != cpl || dpl != cpl)
         {
-            auto desc = loadSegmentDescriptor(value);
-
-            // not present
-            if(!(desc.flags & SD_Present))
-            {
-                if(r == Reg16::SS)
-                    fault(Fault::SS, value & ~3);
-                else
-                    fault(Fault::NP, value & ~3);
-                return false;
-            }
-
-            // check data/code
-            // (CS could be a gate but we'll handle that in the call op)
-            if(!(desc.flags & SD_Type))
-            {
-                fault(Fault::GP, value & ~3);
-                return false;
-            }
-
-            unsigned rpl = value & 3;
-            unsigned dpl = (desc.flags & SD_PrivilegeLevel) >> 21;
-
-            if(r == Reg16::CS)
-            {
-                // TODO
-            }
-            else if(r == Reg16::SS)
-            {
-                // check privileges
-                if(rpl != cpl || dpl != cpl)
-                {
-                    fault(Fault::GP, value & ~3);
-                    return false;
-                }
-
-                // needs to be writable data segment
-                if((desc.flags & SD_Executable) || !(desc.flags & SD_ReadWrite))
-                {
-                    fault(Fault::GP, value & ~3);
-                    return false;
-                }
-            }
-            else // DS, ES, FS, GS
-            {
-                // check privileges (data or non-conforming code)
-                if((!(desc.flags & SD_Executable) || !(desc.flags & SD_DirConform)) && rpl > dpl && cpl > dpl)
-                {
-                    fault(Fault::GP, value & ~3);
-                    return false;
-                }
-            }
-
-            getCachedSegmentDescriptor(r) = desc;
+            fault(Fault::GP, value & ~3);
+            return false;
         }
+
+        // needs to be writable data segment
+        if((desc.flags & SD_Executable) || !(desc.flags & SD_ReadWrite))
+        {
+            fault(Fault::GP, value & ~3);
+            return false;
+        }
+    }
+    else // DS, ES, FS, GS
+    {
+        // check privileges (data or non-conforming code)
+        if((!(desc.flags & SD_Executable) || !(desc.flags & SD_DirConform)) && rpl > dpl && cpl > dpl)
+        {
+            fault(Fault::GP, value & ~3);
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool CPU::setSegmentReg(Reg16 r, uint16_t value)
+{
+    if(isProtectedMode() && !(flags & Flag_VM))
+    {
+        if(!checkSegmentSelector(r, value))
+            return false;
+        
+        getCachedSegmentDescriptor(r) = loadSegmentDescriptor(value);
         reg(r) = value;
 
         if(r == Reg16::CS)
