@@ -4828,7 +4828,22 @@ void RAM_FUNC(CPU::executeInstruction)()
             }
             break;
         }
+        case 0xE5: // IN AX from imm8
+        {
+            auto port = readMem8(addr + 1);
 
+            if(checkIOPermission(port))
+            {
+                if(operandSize32)
+                    reg(Reg32::EAX) = sys.readIOPort16(port) | sys.readIOPort16(port + 2) << 16;
+                else
+                    reg(Reg16::AX) = sys.readIOPort16(port);
+
+                reg(Reg32::EIP)++;
+                cyclesExecuted(8 + 4);
+            }
+            break;
+        }
         case 0xE6: // OUT AL to imm8
         {
             auto port = readMem8(addr + 1);
