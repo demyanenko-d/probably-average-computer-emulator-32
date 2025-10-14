@@ -4366,32 +4366,82 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
 
         case 0xCA: // RET far, add to SP
-        {
-            // pop IP
-            auto newIP = pop(operandSize32);
-
-            // pop CS
-            auto newCS = pop(operandSize32);
-
-            // add imm to SP
-            auto imm = readMem16(addr + 1);
-            reg(Reg16::SP) += imm;
-
-            setSegmentReg(Reg16::CS, newCS);
-            setIP(newIP);
-            cyclesExecuted(25 + 2 * 4);
-            break;
-        }
         case 0xCB: // RET far
         {
+            // need to validate CS BEFORE popping anything...
+            if(isProtectedMode() && !(flags & Flag_VM))
+            {
+                auto newCS = peek(operandSize32, 1);
+                if(!checkSegmentSelector(Reg16::CS, newCS))
+                    break;
+            }
+
             // pop IP
             auto newIP = pop(operandSize32);
 
             // pop CS
             auto newCS = pop(operandSize32);
 
-            setSegmentReg(Reg16::CS, newCS);
-            setIP(newIP);
+            if(opcode == 0xCA)
+            {
+                // add imm to SP
+                auto imm = readMem16(addr + 1);
+                if(stackAddrSize32)
+                    reg(Reg32::ESP) += imm;
+                else
+                    reg(Reg16::SP) += imm;
+            }
+
+            if(isProtectedMode() && !(flags & Flag_VM))
+            {
+                int rpl = newCS & 3;
+
+                if(rpl > cpl) // outer privilege
+                {
+                    // TODO: setSegmentReg is going to check the selector again
+                    setSegmentReg(Reg16::CS, newCS);
+                    setIP(newIP);
+
+                    // additional stack restore
+                    auto newSP = pop(operandSize32);
+                    auto newSS = pop(operandSize32);
+
+                    if(setSegmentReg(Reg16::SS, newSS))
+                        reg(Reg32::ESP) = newSP;
+                    else
+                    {
+                        // FIXME: pre-validate
+                        printf("RET SS failt!\n");
+                        exit(1);
+                    }
+
+                    // check ES/DS/FS/GS descriptors against new CPL
+                    auto checkSeg = [this](Reg16 r)
+                    {
+                        auto desc = getCachedSegmentDescriptor(r);
+                        int dpl = (desc.flags & SD_PrivilegeLevel) >> 21;
+                        // dpl < cpl, data or non-conforming code
+                        if(dpl < cpl && (!(desc.flags & SD_Executable) || !(desc.flags & SD_DirConform)))
+                            setSegmentReg(r, 0); // reset to NULL
+                    };
+
+                    checkSeg(Reg16::ES);
+                    checkSeg(Reg16::DS);
+                    checkSeg(Reg16::FS);
+                    checkSeg(Reg16::GS);
+                }
+                else // same privilege
+                {
+                    setSegmentReg(Reg16::CS, newCS);
+                    setIP(newIP);
+                }
+            }
+            else // real mode
+            {
+                setSegmentReg(Reg16::CS, newCS);
+                setIP(newIP);
+            }
+
             cyclesExecuted(26 + 2 * 4);
             break;
         }
