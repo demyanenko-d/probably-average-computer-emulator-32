@@ -1017,6 +1017,57 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                     break;
                 }
+
+                case 0x02: // LAR
+                {
+                    assert(isProtectedMode() && !(flags & Flag_VM));
+
+                    auto modRM = readMem8(addr + 2);
+                    auto r = (modRM >> 3) & 0x7;
+
+                    int cycles;
+                    auto selector = readRM16(modRM, cycles, addr + 1);
+
+                    auto desc = loadSegmentDescriptor(selector);
+
+                    // privileges
+                    int rpl = selector & 3;
+                    int dpl = (desc.flags & SD_PrivilegeLevel) >> 21;
+
+                    // no priv checks for conforming code segment
+                    bool isConformingCode = (desc.flags & (SD_Type | SD_DirConform | SD_Executable)) == (SD_Type | SD_DirConform | SD_Executable);
+
+                    bool validDesc = isConformingCode || (cpl <= dpl && rpl <= dpl);
+
+                    if(!(desc.flags & SD_Type))
+                    {
+                        int sysType = (desc.flags & SD_SysType) >> 16;
+                        // LDT, TSS or call/task gate
+                        if(sysType != 0x1 && sysType != 0x2 && sysType != 0x3 && sysType != 0x4 &&
+                            sysType != 0x5 && sysType != 0x9 && sysType != 0xB && sysType != 0xC)
+                        {
+                            validDesc = false;
+                        }
+                    }
+
+                    if(validDesc)
+                    {
+                        flags |= Flag_Z;
+
+                        // reorder the bits
+                        auto access = (desc.flags & 0xFF0000) >> 8 | (desc.flags & 0xF000) << 8;
+
+                        if(operandSize32)
+                            reg(static_cast<Reg32>(r)) = access;
+                        else
+                            reg(static_cast<Reg16>(r)) = access;
+                    }
+                    else
+                        flags &= ~Flag_Z;
+
+                    reg(Reg32::EIP) += 2;
+                    break;
+                }
                 case 0x03: // LSL
                 {
                     assert(isProtectedMode() && !(flags & Flag_VM));
