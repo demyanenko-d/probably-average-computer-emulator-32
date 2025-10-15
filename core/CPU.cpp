@@ -4974,8 +4974,44 @@ void RAM_FUNC(CPU::executeInstruction)()
                 newCS = readMem16(addr + 3);
             }
 
-            setIP(newIP);
+            if(isProtectedMode() && !(flags & Flag_VM))
+            {
+                if(!checkSegmentSelector(Reg16::CS, newCS, true))
+                    break;
+
+                auto newCSFlags = loadSegmentDescriptor(newCS).flags;
+                unsigned rpl = newCS & 3;
+                unsigned dpl = (newCSFlags & SD_PrivilegeLevel) >> 21;
+
+                if(!(newCSFlags & SD_Type))
+                {
+                    printf("jmp gate/task\n");
+                    exit(1);
+                }
+                else if(newCSFlags & SD_DirConform) // conforming code
+                {
+                    if(dpl > cpl)
+                    {
+                        fault(Fault::GP, newCS & ~3);
+                        break;
+                    }
+
+                    newCS = (newCS & ~3) | cpl; // RPL = CPL
+                }
+                else // non-conforming code
+                {
+                    if(rpl > cpl || dpl != cpl)
+                    {
+                        fault(Fault::GP, newCS & ~3);
+                        break;
+                    }
+
+                    newCS = (newCS & ~3) | cpl; // RPL = CPL
+                }
+            }
+
             setSegmentReg(Reg16::CS, newCS);
+            setIP(newIP);
 
             cyclesExecuted(15);
             break;
