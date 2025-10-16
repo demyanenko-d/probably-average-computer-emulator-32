@@ -2479,6 +2479,9 @@ void RAM_FUNC(CPU::executeInstruction)()
 
             auto port = reg(Reg16::DX);
 
+            if(!checkIOPermission(port))
+                break;
+
             uint32_t di;
             if(addressSize32)
                 di = reg(Reg32::EDI);
@@ -2532,6 +2535,9 @@ void RAM_FUNC(CPU::executeInstruction)()
                 step *= 2;
 
             auto port = reg(Reg16::DX);
+
+            if(!checkIOPermission(port))
+                break;
 
             uint32_t di;
             if(addressSize32)
@@ -2602,6 +2608,9 @@ void RAM_FUNC(CPU::executeInstruction)()
                 step *= 2;
 
             auto port = reg(Reg16::DX);
+
+            if(!checkIOPermission(port))
+                break;
 
             uint32_t si;
             if(addressSize32)
