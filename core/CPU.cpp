@@ -4423,7 +4423,7 @@ void RAM_FUNC(CPU::executeInstruction)()
             delayInterrupt = true;
 
             // need to validate CS BEFORE popping anything...
-            if(isProtectedMode() && !(flags & Flag_VM))
+            if(isProtectedMode() && !(flags & Flag_VM) && !(flags & Flag_NT))
             {
                 auto newCS = peek(operandSize32, 1);
                 auto newFlags = peek(operandSize32, 2);
