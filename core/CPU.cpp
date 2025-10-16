@@ -874,19 +874,48 @@ void RAM_FUNC(CPU::executeInstruction)()
                         }
                         case 0x3: // LTR
                         {
-                            assert(isProtectedMode());
+                            // not recognised in real/virtual-8086 mode
+                            if(!isProtectedMode() || (flags & Flag_VM))
+                            {
+                                fault(Fault::UD);
+                                break;
+                            }
 
                             int cycles;
                             auto selector = readRM16(modRM, cycles, addr + 1);
 
-                            auto &newDesc = getCachedSegmentDescriptor(Reg16::TR);
-                            newDesc = loadSegmentDescriptor(selector);
+                            // must be global
+                            if((selector & 4) || (selector | 7) > gdtLimit)
+                            {
+                                fault(Fault::GP, selector & ~3);
+                                break;
+                            }
 
-                            assert(newDesc.flags & SD_Present); // present
-                            assert(!(newDesc.flags & SD_Type)); // system
-                            assert((newDesc.flags & SD_SysType) == 0x1 << 16 || (newDesc.flags & SD_SysType) == 0x9 << 16); // 16/32bit TSS
+                            auto newDesc = loadSegmentDescriptor(selector);
 
-                            // FIXME: set busy (sys type | 2)
+                            // make sure it's a TSS
+                            auto sysType = newDesc.flags & SD_SysType;
+                            if((newDesc.flags & SD_Type) || (sysType != SD_SysTypeTSS16 && sysType != SD_SysTypeTSS32))
+                            {
+                                fault(Fault::GP, selector & ~3);
+                                break;
+                            }
+
+                            if(!(newDesc.flags & SD_Present))
+                            {
+                                fault(Fault::NP, selector & ~3);
+                                break;
+                            }
+
+                            // set busy in the cache
+                            newDesc.flags |= 2 << 16;
+
+                            getCachedSegmentDescriptor(Reg16::TR) = newDesc;
+                            reg(Reg16::TR) = selector;
+
+                            // set busy (sys type | 2)
+                            auto addr = (selector >> 3) * 8 + gdtBase;
+                            writeMem8(addr + 5, 0, readMem8(addr + 5) | 2);
 
                             reg(Reg32::EIP) += 2;
                             break;
