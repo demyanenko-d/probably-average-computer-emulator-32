@@ -186,8 +186,6 @@ private:
 
     bool taskSwitch(uint16_t selector, uint32_t retAddr, TaskSwitchSource source);
 
-    void cyclesExecuted(int cycles);
-
     void serviceInterrupt(uint8_t vector);
 
     void fault(Fault fault);
