@@ -802,7 +802,17 @@ void RAM_FUNC(CPU::executeInstruction)()
         {
             auto r = static_cast<Reg16>(((opcode >> 3) & 7) + static_cast<int>(Reg16::ES));
 
-            push(reg(r), operandSize32);
+            // 32bit only writes two bytes...
+            if(operandSize32)
+            {
+                // ... but still adjust SP for 4
+                if(stackAddrSize32)
+                    reg(Reg32::ESP) -= 2;
+                else
+                    reg(Reg16::SP) -= 2;
+            }
+
+            push(reg(r), false);
 
             cyclesExecuted(10 + 4);
             break;
