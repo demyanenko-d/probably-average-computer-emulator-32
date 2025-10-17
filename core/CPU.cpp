@@ -589,7 +589,10 @@ void RAM_FUNC(CPU::executeInstruction)()
     faultIP = reg(Reg32::EIP);
     auto addr = getSegmentOffset(Reg16::CS) + (reg(Reg32::EIP)++);
 
-    auto opcode = readMem8(addr);
+    uint8_t opcode;
+    if(!readMem8(addr, opcode))
+        return;
+
     bool rep = false, repZ = true;
     segmentOverride = Reg16::AX; // not a segment reg, also == 0
     bool operandSizeOverride = false;
@@ -618,7 +621,9 @@ void RAM_FUNC(CPU::executeInstruction)()
         else
             break;
 
-        opcode = readMem8(++addr);
+        if(!readMem8(++addr, opcode))
+            return;
+
         reg(Reg32::EIP)++;
     }
 
@@ -648,7 +653,10 @@ void RAM_FUNC(CPU::executeInstruction)()
                     return ret + 4;
 
                 // disp instead of base
-                if(rm == 4 && (readMem8(nextAddr) & 7) == 5)
+                uint8_t sib;
+                readMem8(nextAddr, sib);
+                // FIXME: fault here would be bad
+                if(rm == 4 && (sib & 7) == 5)
                     ret += 4;
             
                 return ret;
@@ -686,10 +694,15 @@ void RAM_FUNC(CPU::executeInstruction)()
         uint32_t sp = stackAddrSize32 ? reg(Reg32::ESP) : reg(Reg16::SP);
         uint32_t ret;
         
+        // FIXME: faults
         if(is32)
-            ret = readMem32(sp, Reg16::SS);
+            readMem32(sp, Reg16::SS, ret);
         else
-            ret = readMem16(sp, Reg16::SS);
+        {
+            uint16_t tmp;
+            readMem16(sp, Reg16::SS, tmp);
+            ret = tmp;
+        }
 
         sp += is32 ? 4 : 2;
 
@@ -713,10 +726,13 @@ void RAM_FUNC(CPU::executeInstruction)()
             sp &= 0xFFFF;
         
         if(is32)
-            ret = readMem32(sp, Reg16::SS);
+            readMem32(sp, Reg16::SS, ret);
         else
-            ret = readMem16(sp, Reg16::SS);
-
+        {
+            uint16_t tmp;
+            readMem16(sp, Reg16::SS, tmp);
+            ret = tmp;
+        }
         return ret;
     };
 
@@ -858,12 +874,18 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0x0F:
         {
-            auto opcode2 = readMem8(addr + 1);
+            uint8_t opcode2;
+            if(!readMem8(addr + 1, opcode2))
+                return;
+
             switch(opcode2)
             {
                 case 0x00:
                 {
-                    auto modRM = readMem8(addr + 2);
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
+
                     auto exOp = (modRM >> 3) & 0x7;
 
                     switch(exOp)
@@ -961,7 +983,9 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                             // set busy (sys type | 2)
                             auto addr = (selector >> 3) * 8 + gdtBase;
-                            writeMem8(addr + 5, readMem8(addr + 5) | 2);
+                            uint8_t access;
+                            readMem8(addr + 5, access);
+                            writeMem8(addr + 5, access | 2);
 
                             reg(Reg32::EIP) += 2;
                             break;
@@ -1021,7 +1045,10 @@ void RAM_FUNC(CPU::executeInstruction)()
                 }
                 case 0x01:
                 {
-                    auto modRM = readMem8(addr + 2);
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
+
                     auto exOp = (modRM >> 3) & 0x7;
 
                     switch(exOp)
@@ -1045,24 +1072,26 @@ void RAM_FUNC(CPU::executeInstruction)()
                         case 0x2: // LGDT
                         {
                             auto [offset, segment] = getEffectiveAddress(modRM >> 6, modRM & 7, false, addr + 1);
-                            gdtLimit = readMem16(offset, segment);
-                            gdtBase = readMem32(offset + 2, segment);
 
-                            if(!operandSize32)
-                                gdtBase &= 0xFFFFFF;
-                            reg(Reg32::EIP) += 2;
+                            if(readMem16(offset, segment, gdtLimit) && readMem32(offset + 2, segment, gdtBase))
+                            {
+                                if(!operandSize32)
+                                    gdtBase &= 0xFFFFFF;
+                                reg(Reg32::EIP) += 2;
+                            }
                             break;
                         }
                         case 0x3: // LIDT
                         {
                             auto [offset, segment] = getEffectiveAddress(modRM >> 6, modRM & 7, false, addr + 1);
-                            idtLimit = readMem16(offset, segment);
-                            idtBase = readMem32(offset + 2, segment);
 
-                            if(!operandSize32)
-                                idtBase &= 0xFFFFFF;
+                            if(readMem16(offset, segment, idtLimit) && readMem32(offset + 2, segment, idtBase))
+                            {
+                                if(!operandSize32)
+                                    idtBase &= 0xFFFFFF;
 
-                            reg(Reg32::EIP) += 2;
+                                reg(Reg32::EIP) += 2;
+                            }
                             break;
                         }
 
@@ -1093,7 +1122,10 @@ void RAM_FUNC(CPU::executeInstruction)()
                 {
                     assert(isProtectedMode() && !(flags & Flag_VM));
 
-                    auto modRM = readMem8(addr + 2);
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
+
                     auto r = (modRM >> 3) & 0x7;
 
                     auto selector = readRM16(modRM, addr + 1);
@@ -1142,7 +1174,10 @@ void RAM_FUNC(CPU::executeInstruction)()
                 {
                     assert(isProtectedMode() && !(flags & Flag_VM));
 
-                    auto modRM = readMem8(addr + 2);
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
+
                     auto r = (modRM >> 3) & 0x7;
 
                     auto selector = readRM16(modRM, addr + 1);
@@ -1190,7 +1225,10 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                 case 0x20: // MOV from control reg
                 {
-                    auto modRM = readMem8(addr + 2);
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
+
                     auto r = static_cast<Reg32>(((modRM >> 3) & 0x7) + static_cast<int>(Reg32::CR0));
                     auto rm = static_cast<Reg32>(modRM & 0x7);
 
@@ -1202,9 +1240,14 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                 case 0x22: // MOV to control reg
                 {
-                    auto modRM = readMem8(addr + 2);
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
+
                     auto r = static_cast<Reg32>(((modRM >> 3) & 0x7) + static_cast<int>(Reg32::CR0));
                     auto rm = static_cast<Reg32>(modRM & 0x7);
+
+                    auto changed = reg(r) ^ reg(rm);
 
                     reg(r) = reg(rm);
 
@@ -1231,12 +1274,15 @@ void RAM_FUNC(CPU::executeInstruction)()
                 {
                     int cond = opcode2 & 0xF;
 
-                    int off;
+                    int32_t off;
 
                     if(operandSize32)
-                        off = static_cast<int32_t>(readMem32(addr + 2));
-                    else
-                        off = static_cast<int16_t>(readMem16(addr + 2));
+                    {
+                        if(!readMem32(addr + 2, off))
+                            return;
+                    }
+                    else if(!readMem16(addr + 2, off))
+                        return;
 
                     if(getCondValue(cond))
                         setIP(reg(Reg32::EIP) + (operandSize32 ? 5 : 3) + off);
@@ -1262,7 +1308,10 @@ void RAM_FUNC(CPU::executeInstruction)()
                 case 0x9F: // SETNLE/SETG
                 {
                     int cond = opcode2 & 0xF;
-                    auto modRM = readMem8(addr + 2);
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
+
                     reg(Reg32::EIP) += 2;
 
                     writeRM8(modRM, getCondValue(cond) ? 1 : 0, addr + 1);
@@ -1280,7 +1329,10 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                 case 0xA3: // BT
                 {
-                    auto modRM = readMem8(addr + 2);
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
+
                     auto r = (modRM >> 3) & 0x7;
                     int bit;
                     bool value;
@@ -1309,10 +1361,17 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                 case 0xA4: // SHLD by imm
                 {
-                    auto modRM = readMem8(addr + 2);
-                    auto r = (modRM >> 3) & 0x7;
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
 
-                    auto count = readMem8(addr + 3 + getDispLen(modRM, addr + 3)) & 0x1F;
+                    auto r = (modRM >> 3) & 0x7;
+                
+                    uint8_t count;
+                    if(!readMem8(addr + 3 + getDispLen(modRM, addr + 3), count))
+                        return;
+
+                    count &= 0x1F;
                     reg(Reg32::EIP) += 3;
 
                     if(operandSize32)
@@ -1332,7 +1391,10 @@ void RAM_FUNC(CPU::executeInstruction)()
                 }
                 case 0xA5: // SHLD by CL
                 {
-                    auto modRM = readMem8(addr + 2);
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
+
                     auto r = (modRM >> 3) & 0x7;
                     reg(Reg32::EIP) += 2;
 
@@ -1365,7 +1427,10 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                 case 0xAB: // BTS
                 {
-                    auto modRM = readMem8(addr + 2);
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
+
                     auto r = (modRM >> 3) & 0x7;
                     int bit;
                     bool value;
@@ -1406,10 +1471,17 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                 case 0xAC: // SHRD by imm
                 {
-                    auto modRM = readMem8(addr + 2);
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
+
                     auto r = (modRM >> 3) & 0x7;
 
-                    auto count = readMem8(addr + 3 + getDispLen(modRM, addr + 3)) & 0x1F;
+                    uint8_t count;
+                    if(!readMem8(addr + 3 + getDispLen(modRM, addr + 3), count))
+                        return;
+
+                    count &= 0x1F;
                     reg(Reg32::EIP) += 3;
 
                     if(operandSize32)
@@ -1429,7 +1501,10 @@ void RAM_FUNC(CPU::executeInstruction)()
                 }
                 case 0xAD: // SHRD by CL
                 {
-                    auto modRM = readMem8(addr + 2);
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
+
                     auto r = (modRM >> 3) & 0x7;
                     reg(Reg32::EIP) += 2;
 
@@ -1453,7 +1528,10 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                 case 0xAF: // IMUL r, r/m
                 {
-                    auto modRM = readMem8(addr + 2);
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
+
                     auto r = (modRM >> 3) & 0x7;
 
                     if(operandSize32)
@@ -1491,7 +1569,10 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                 case 0xB3: // BTR
                 {
-                    auto modRM = readMem8(addr + 2);
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
+
                     auto r = (modRM >> 3) & 0x7;
                     int bit;
                     bool value;
@@ -1541,7 +1622,10 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                 case 0xB6: // MOVZX 8 -> 16/32
                 {
-                    auto modRM = readMem8(addr + 2);
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
+
                     auto r = (modRM >> 3) & 0x7;
 
                     uint32_t v = readRM8(modRM, addr + 1);
@@ -1556,7 +1640,10 @@ void RAM_FUNC(CPU::executeInstruction)()
                 }
                 case 0xB7: // MOVZX 16 -> 16/32
                 {
-                    auto modRM = readMem8(addr + 2);
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
+
                     auto r = (modRM >> 3) & 0x7;
 
                     uint32_t v = readRM16(modRM, addr + 1);
@@ -1572,14 +1659,20 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                 case 0xBA:
                 {
-                    auto modRM = readMem8(addr + 2);
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
+
+                    uint8_t bit;
+                    if(!readMem8(addr + 3 + getDispLen(modRM, addr + 3), bit))
+                        return;
+
                     auto exOp = (modRM >> 3) & 0x7;
 
                     switch(exOp)
                     {
                         case 4: // BT
                         {
-                            int bit = readMem8(addr + 3 + getDispLen(modRM, addr + 3));
                             bool value;
 
                             if(operandSize32)
@@ -1597,7 +1690,6 @@ void RAM_FUNC(CPU::executeInstruction)()
                         }
                         case 5: // BTS
                         {
-                            int bit = readMem8(addr + 3 + getDispLen(modRM, addr + 3));
                             bool value;
 
                             if(operandSize32)
@@ -1631,7 +1723,6 @@ void RAM_FUNC(CPU::executeInstruction)()
                         }
                         case 6: // BTR
                         {
-                            int bit = readMem8(addr + 3 + getDispLen(modRM, addr + 3));
                             bool value;
 
                             if(operandSize32)
@@ -1665,7 +1756,6 @@ void RAM_FUNC(CPU::executeInstruction)()
                         }
                         case 7: // BTC
                         {
-                            int bit = readMem8(addr + 3 + getDispLen(modRM, addr + 3));
                             bool value;
 
                             if(operandSize32)
@@ -1706,7 +1796,10 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                 case 0xBB: // BTC
                 {
-                    auto modRM = readMem8(addr + 2);
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
+
                     auto r = (modRM >> 3) & 0x7;
                     int bit;
                     bool value;
@@ -1747,7 +1840,10 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                 case 0xBC: // BSF
                 {
-                    auto modRM = readMem8(addr + 2);
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
+
                     auto r = (modRM >> 3) & 0x7;
 
                     auto val = operandSize32 ? readRM32(modRM, addr + 1) : readRM16(modRM, addr + 1);
@@ -1770,7 +1866,10 @@ void RAM_FUNC(CPU::executeInstruction)()
                 }
                 case 0xBD: // BSR
                 {
-                    auto modRM = readMem8(addr + 2);
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
+
                     auto r = (modRM >> 3) & 0x7;
 
                     auto val = operandSize32 ? readRM32(modRM, addr + 1) : readRM16(modRM, addr + 1);
@@ -1794,7 +1893,10 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                 case 0xBE: // MOVSX 8 -> 16/32
                 {
-                    auto modRM = readMem8(addr + 2);
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
+
                     auto r = (modRM >> 3) & 0x7;
 
                     uint32_t v = readRM8(modRM, addr + 1);
@@ -1813,7 +1915,10 @@ void RAM_FUNC(CPU::executeInstruction)()
                 }
                 case 0xBF: // MOVSX 16 -> 16/32
                 {
-                    auto modRM = readMem8(addr + 2);
+                    uint8_t modRM;
+                    if(!readMem8(addr + 2, modRM))
+                        return;
+
                     auto r = (modRM >> 3) & 0x7;
 
                     uint32_t v = readRM16(modRM, addr + 1);
@@ -2078,7 +2183,10 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0x38: // CMP r/m8 r8
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto r = (modRM >> 3) & 0x7;
 
             uint8_t dest = readRM8(modRM, addr);
@@ -2092,7 +2200,10 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0x39: // CMP r/m16 r16
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto r = (modRM >> 3) & 0x7;
 
             if(operandSize32)
@@ -2115,7 +2226,10 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0x3A: // CMP r8 r/m8
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto r = (modRM >> 3) & 0x7;
 
             uint8_t src = readRM8(modRM, addr);
@@ -2129,7 +2243,10 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0x3B: // CMP r16 r/m16
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto r = (modRM >> 3) & 0x7;
 
             if(operandSize32)
@@ -2152,7 +2269,9 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0x3C: // CMP AL imm
         {
-            auto imm = readMem8(addr + 1);
+            uint8_t imm;
+            if(!readMem8(addr + 1, imm))
+                return;
 
             doSub(reg(Reg8::AL), imm, flags);
 
@@ -2163,7 +2282,9 @@ void RAM_FUNC(CPU::executeInstruction)()
         {
             if(operandSize32)
             {
-                uint32_t imm = readMem32(addr + 1) ;
+                uint32_t imm;
+                if(!readMem32(addr + 1, imm))
+                    return;
 
                 doSub(reg(Reg32::EAX), imm, flags);
 
@@ -2171,7 +2292,9 @@ void RAM_FUNC(CPU::executeInstruction)()
             }
             else
             {
-                uint16_t imm = readMem16(addr + 1);
+                uint16_t imm;
+                if(!readMem16(addr + 1, imm))
+                    return;
 
                 doSub(reg(Reg16::AX), imm, flags);
 
@@ -2320,7 +2443,10 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0x62: // BOUND
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto r = (modRM >> 3) & 0x7;
 
             auto [offset, segment] = getEffectiveAddress(modRM >> 6, modRM & 7, false, addr);
@@ -2330,14 +2456,24 @@ void RAM_FUNC(CPU::executeInstruction)()
             if(operandSize32)
             {
                 index = static_cast<int32_t>(reg(static_cast<Reg32>(r)));
-                lower = static_cast<int32_t>(readMem32(offset, segment));
-                upper = static_cast<int32_t>(readMem32(offset + 4, segment));
+                uint32_t tmpL, tmpU;
+
+                if(!readMem32(offset, segment, tmpL) || !readMem32(offset + 4, segment, tmpU))
+                    break;
+
+                lower = static_cast<int32_t>(tmpL);
+                upper = static_cast<int32_t>(tmpU);
             }
             else
             {
                 index = static_cast<int16_t>(reg(static_cast<Reg16>(r)));
-                lower = static_cast<int16_t>(readMem16(offset, segment));
-                upper = static_cast<int16_t>(readMem16(offset + 2, segment));
+                uint16_t tmpL, tmpU;
+
+                if(!readMem16(offset, segment, tmpL) || !readMem16(offset + 2, segment, tmpU))
+                    break;
+
+                lower = static_cast<int16_t>(tmpL);
+                upper = static_cast<int16_t>(tmpU);
             }
 
             if(index < lower || index > upper)
@@ -2354,7 +2490,10 @@ void RAM_FUNC(CPU::executeInstruction)()
                 fault(Fault::UD);
             else
             {
-                auto modRM = readMem8(addr + 1);
+                uint8_t modRM;
+                if(!readMem8(addr + 1, modRM))
+                    return;
+
                 auto r = static_cast<Reg16>((modRM >> 3) & 0x7);
                 reg(Reg32::EIP)++;
 
@@ -2379,12 +2518,16 @@ void RAM_FUNC(CPU::executeInstruction)()
   
             if(operandSize32)
             {
-                imm = readMem32(addr + 1);
+                if(!readMem32(addr + 1, imm))
+                    return;
+
                 reg(Reg32::EIP) += 4;
             }
             else
             {
-                imm = readMem16(addr + 1);
+                if(!readMem16(addr + 1, imm))
+                    return;
+
                 reg(Reg32::EIP) += 2;
             }
 
@@ -2394,14 +2537,20 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0x69: // IMUL imm
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto r = (modRM >> 3) & 0x7;
    
             auto immAddr = addr + 2 + getDispLen(modRM, addr + 2);
 
             if(operandSize32)
             {
-                auto imm = static_cast<int32_t>(readMem32(immAddr));
+                int32_t imm;
+
+                if(!readMem32(immAddr, imm))
+                    return;
 
                 int64_t res = static_cast<int64_t>(static_cast<int32_t>(readRM32(modRM, addr))) * imm;
                 reg(static_cast<Reg32>(r)) = res;
@@ -2416,7 +2565,10 @@ void RAM_FUNC(CPU::executeInstruction)()
             }
             else
             {
-                auto imm = static_cast<int16_t>(readMem16(immAddr));
+                int32_t imm;
+
+                if(!readMem16(immAddr, imm))
+                    return;
 
                 int32_t res = static_cast<int16_t>(readRM16(modRM, addr)) * imm;
                 reg(static_cast<Reg16>(r)) = res;
@@ -2435,7 +2587,9 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0x6A: // PUSH imm8
         {
-            uint32_t imm = readMem8(addr + 1);
+            uint32_t imm;
+            if(!readMem8(addr + 1, imm))
+                return;
 
             // sign extend
             if(imm & 0x80)
@@ -2449,9 +2603,15 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0x6B: // IMUL sign extended byte
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto r = (modRM >> 3) & 0x7;
-            int8_t imm = readMem8(addr + 2 + getDispLen(modRM, addr + 2));
+
+            int32_t imm;
+            if(!readMem8(addr + 2 + getDispLen(modRM, addr + 2), imm))
+                return;
 
             if(operandSize32)
             {
@@ -2624,13 +2784,19 @@ void RAM_FUNC(CPU::executeInstruction)()
                     // TODO: interrupt
                     if(operandSize32)
                     {
-                        auto v = readMem32(si, segment);
+                        uint32_t v;
+                        if(!readMem32(si, segment, v))
+                            break;
+
                         sys.writeIOPort16(port, v);
                         sys.writeIOPort16(port + 2, v >> 16);
                     }
                     else
                     {
-                        auto v = readMem16(si, segment);
+                        uint16_t v;
+                        if(!readMem16(si, segment, v))
+                            break;
+
                         sys.writeIOPort16(port, v);
                     }
 
@@ -2651,13 +2817,19 @@ void RAM_FUNC(CPU::executeInstruction)()
             {
                 if(operandSize32)
                 {
-                    auto v = readMem32(si, segment);
+                    uint32_t v;
+                    if(!readMem32(si, segment, v))
+                        break;
+
                     sys.writeIOPort16(port, v);
                     sys.writeIOPort16(port + 2, v >> 16);
                 }
                 else
                 {
-                    auto v = readMem16(si, segment);
+                    uint16_t v;
+                    if(!readMem16(si, segment, v))
+                        break;
+
                     sys.writeIOPort16(port, v);
                 }
 
@@ -2690,7 +2862,9 @@ void RAM_FUNC(CPU::executeInstruction)()
         {
             int cond = opcode & 0xF;
 
-            auto off = static_cast<int8_t>(readMem8(addr + 1));
+            int32_t off;
+            if(!readMem8(addr + 1, off))
+                return;
        
             if(getCondValue(cond))
                 setIP(reg(Reg32::EIP) + 1 + off);
@@ -2702,12 +2876,18 @@ void RAM_FUNC(CPU::executeInstruction)()
         case 0x80: // imm8 op
         case 0x82: // same thing
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto exOp = (modRM >> 3) & 0x7;
 
             auto dest = readRM8(modRM, addr);
             int immOff = 2 + getDispLen(modRM, addr + 2);
-            auto imm = readMem8(addr + immOff);
+
+            uint8_t imm;
+            if(!readMem8(addr + immOff, imm))
+                return;
 
             reg(Reg32::EIP) += 2;
 
@@ -2743,7 +2923,10 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0x81: // imm16 op
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto exOp = (modRM >> 3) & 0x7;
 
             int immOff = 2 + getDispLen(modRM, addr + 2);
@@ -2752,7 +2935,10 @@ void RAM_FUNC(CPU::executeInstruction)()
             {
                 auto dest = readRM32(modRM, addr);
                 
-                uint32_t imm = readMem32(addr + immOff);
+                uint32_t imm;
+                if(!readMem32(addr + immOff, imm))
+                    return;
+
                 reg(Reg32::EIP) += 5;
 
                 switch(exOp)
@@ -2787,7 +2973,10 @@ void RAM_FUNC(CPU::executeInstruction)()
             {
                 auto dest = readRM16(modRM, addr);
                 
-                uint16_t imm = readMem16(addr + immOff);
+                uint16_t imm;
+                if(!readMem16(addr + immOff, imm))
+                    return;
+
                 reg(Reg32::EIP) += 3;
 
                 switch(exOp)
@@ -2823,7 +3012,10 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0x83: // signed imm8 op
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto exOp = (modRM >> 3) & 0x7;
 
             int immOff = 2 + getDispLen(modRM, addr + 2);
@@ -2834,7 +3026,10 @@ void RAM_FUNC(CPU::executeInstruction)()
             {
                 auto dest = readRM32(modRM, addr);
                 
-                uint32_t imm = readMem8(addr + immOff);
+                uint32_t imm;
+
+                if(!readMem8(addr + immOff, imm))
+                    return;
 
                 // sign extend
                 if(imm & 0x80)
@@ -2872,7 +3067,13 @@ void RAM_FUNC(CPU::executeInstruction)()
             {
                 auto dest = readRM16(modRM, addr);
 
-                uint16_t imm = readMem8(addr + immOff);
+                uint16_t imm;
+                uint8_t imm8;
+                
+                if(!readMem8(addr + immOff, imm8))
+                    return;
+
+                imm = imm8;
 
                 // sign extend
                 if(imm & 0x80)
@@ -2912,7 +3113,10 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0x84: // TEST r/m8 r8
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto r = (modRM >> 3) & 0x7;
 
             auto src = reg(static_cast<Reg8>(r));
@@ -2925,7 +3129,10 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0x85: // TEST r/m16 r16
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto r = (modRM >> 3) & 0x7;
 
             if(operandSize32)
@@ -2949,7 +3156,10 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0x86: // XCHG r/m8 r8
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto r = (modRM >> 3) & 0x7;
 
             auto srcReg = static_cast<Reg8>(r);
@@ -2964,7 +3174,10 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0x87: // XCHG r/m16 r16
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto r = (modRM >> 3) & 0x7;
 
             if(operandSize32)
@@ -2989,7 +3202,10 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0x88: // MOV reg8 -> r/m
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto r = (modRM >> 3) & 0x7;
             reg(Reg32::EIP)++;
 
@@ -3000,7 +3216,10 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0x89: // MOV reg16 -> r/m
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto r = (modRM >> 3) & 0x7;
             reg(Reg32::EIP)++;
 
@@ -3021,7 +3240,10 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0x8A: // MOV r/m -> reg8
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto r = (modRM >> 3) & 0x7;
 
             auto destReg = static_cast<Reg8>(r);
@@ -3034,7 +3256,10 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0x8B: // MOV r/m -> reg16
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto r = (modRM >> 3) & 0x7;
 
             if(operandSize32)
@@ -3048,7 +3273,10 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0x8C: // MOV sreg -> r/m
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto r = (modRM >> 3) & 0x7;
             reg(Reg32::EIP)++;
 
@@ -3067,7 +3295,10 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0x8D: // LEA
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto r = (modRM >> 3) & 0x7;
 
             // the only time we don't want the segment added...
@@ -3084,7 +3315,10 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0x8E: // MOV r/m -> sreg
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto r = (modRM >> 3) & 0x7;
 
             auto destReg = static_cast<Reg16>(r + static_cast<int>(Reg16::ES));
@@ -3103,7 +3337,10 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0x8F: // POP r/m
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             reg(Reg32::EIP)++;
 
             assert(((modRM >> 3) & 0x7) == 0);
@@ -3193,16 +3430,21 @@ void RAM_FUNC(CPU::executeInstruction)()
 
             if(operandSize32)
             {
-                newIP = readMem32(addr + 1);
+                if(!readMem32(addr + 1, newIP))
+                    return;
+
                 offset += 4;
             }
             else
             {
-                newIP = readMem16(addr + 1);
+                if(!readMem16(addr + 1, newIP))
+                    return;
+
                 offset += 2;
             }
 
-            newCS = readMem16(addr + offset);
+            if(!readMem16(addr + offset, newCS))
+                return;
 
             auto retAddr = reg(Reg32::EIP) + offset + 1 /*+2 for CS, -1 that was added by fetch*/;
 
@@ -3276,18 +3518,22 @@ void RAM_FUNC(CPU::executeInstruction)()
 
             if(addressSize32)
             {
-                memAddr = readMem32(addr + 1);
+                if(!readMem32(addr + 1, memAddr))
+                    return;
+
                 reg(Reg32::EIP) += 4;
             }
             else
             {
-                memAddr = readMem16(addr + 1);
+                if(!readMem16(addr + 1, memAddr))
+                    return;
+
                 reg(Reg32::EIP) += 2;
             }
 
             auto segment = segmentOverride == Reg16::AX ? Reg16::DS : segmentOverride;
 
-            reg(Reg8::AL) = readMem8(memAddr, segment);
+            readMem8(memAddr, segment, reg(Reg8::AL));
             break;
         }
         case 0xA1: // MOV off16 -> AX
@@ -3298,19 +3544,23 @@ void RAM_FUNC(CPU::executeInstruction)()
 
             if(addressSize32)
             {
-                memAddr = readMem32(addr + 1);
+                if(!readMem32(addr + 1, memAddr))
+                    return;
+
                 reg(Reg32::EIP) += 4;
             }
             else
             {
-                memAddr = readMem16(addr + 1);
+                if(!readMem16(addr + 1, memAddr))
+                    return;
+
                 reg(Reg32::EIP) += 2;
             }
 
             if(operandSize32)
-                reg(Reg32::EAX) = readMem32(memAddr, segment);
+                readMem32(memAddr, segment, reg(Reg32::EAX));
             else
-                reg(Reg16::AX) = readMem16(memAddr, segment);
+                readMem16(memAddr, segment, reg(Reg16::AX));
 
             break;
         }
@@ -3320,12 +3570,16 @@ void RAM_FUNC(CPU::executeInstruction)()
 
             if(addressSize32)
             {
-                memAddr = readMem32(addr + 1);
+                if(!readMem32(addr + 1, memAddr))
+                    return;
+
                 reg(Reg32::EIP) += 4;
             }
             else
             {
-                memAddr = readMem16(addr + 1);
+                if(!readMem16(addr + 1, memAddr))
+                    return;
+
                 reg(Reg32::EIP) += 2;
             }
 
@@ -3343,12 +3597,16 @@ void RAM_FUNC(CPU::executeInstruction)()
 
             if(addressSize32)
             {
-                memAddr = readMem32(addr + 1);
+                if(!readMem32(addr + 1, memAddr))
+                    return;
+
                 reg(Reg32::EIP) += 4;
             }
             else
             {
-                memAddr = readMem16(addr + 1);
+                if(!readMem16(addr + 1, memAddr))
+                    return;
+
                 reg(Reg32::EIP) += 2;
             }
 
@@ -3384,8 +3642,8 @@ void RAM_FUNC(CPU::executeInstruction)()
                 while(count)
                 {
                     // TODO: interrupt
-                    auto v = readMem8(si, segment);
-                    if(!writeMem8(di, Reg16::ES, v))
+                    uint8_t v;
+                    if(!readMem8(si, segment, v) || !writeMem8(di, Reg16::ES, v))
                         break;
 
                     si += step;
@@ -3407,8 +3665,8 @@ void RAM_FUNC(CPU::executeInstruction)()
             }
             else
             {
-                auto v = readMem8(si, segment);
-                if(!writeMem8(di, Reg16::ES, v))
+                uint8_t v;
+                if(!readMem8(si, segment, v) || !writeMem8(di, Reg16::ES, v))
                     break;
 
                 si += step;
@@ -3456,14 +3714,14 @@ void RAM_FUNC(CPU::executeInstruction)()
                     // TODO: interrupt
                     if(operandSize32)
                     {
-                        auto v = readMem32(si, segment);
-                        if(!writeMem32(di, Reg16::ES, v))
+                        uint32_t v;
+                        if(!readMem32(si, segment, v) || !writeMem32(di, Reg16::ES, v))
                             break;
                     }
                     else
                     {
-                        auto v = readMem16(si, segment);
-                        if(!writeMem16(di, Reg16::ES, v))
+                        uint16_t v;
+                        if(!readMem16(si, segment, v) || !writeMem16(di, Reg16::ES, v))
                             break;
                     }
 
@@ -3488,14 +3746,14 @@ void RAM_FUNC(CPU::executeInstruction)()
             {
                 if(operandSize32)
                 {
-                    auto v = readMem32(si, segment);
-                    if(!writeMem32(di, Reg16::ES, v))
+                    uint32_t v;
+                    if(!readMem32(si, segment, v) || !writeMem32(di, Reg16::ES, v))
                         break;
                 }
                 else
                 {
-                    auto v = readMem16(si, segment);
-                    if(!writeMem16(di, Reg16::ES, v))
+                    uint16_t v;
+                    if(!readMem16(si, segment, v) || !writeMem16(di, Reg16::ES, v))
                         break;
                 }
 
@@ -3539,8 +3797,9 @@ void RAM_FUNC(CPU::executeInstruction)()
                 while(count)
                 {
                     // TODO: interrupt
-                    auto src = readMem8(si, segment);
-                    auto dest = readMem8(di, Reg16::ES);
+                    uint8_t src, dest;
+                    if(!readMem8(si, segment, src) || !readMem8(di, Reg16::ES, dest))
+                        break;
 
                     doSub(src, dest, flags);
 
@@ -3566,8 +3825,9 @@ void RAM_FUNC(CPU::executeInstruction)()
             }
             else
             {
-                auto src = readMem8(si, segment);
-                auto dest = readMem8(di, Reg16::ES);
+                uint8_t src, dest;
+                if(!readMem8(si, segment, src) || !readMem8(di, Reg16::ES, dest))
+                    break;
 
                 doSub(src, dest, flags);
 
@@ -3622,15 +3882,17 @@ void RAM_FUNC(CPU::executeInstruction)()
                     // TODO: interrupt
                     if(operandSize32)
                     {
-                        auto src = readMem32(si, segment);
-                        auto dest = readMem32(di, Reg16::ES);
+                        uint32_t src, dest;
+                        if(!readMem32(si, segment, src) || !readMem32(di, Reg16::ES, dest))
+                            break;
 
                         doSub(src, dest, flags);
                     }
                     else
                     {
-                        auto src = readMem16(si, segment);
-                        auto dest = readMem16(di, Reg16::ES);
+                        uint16_t src, dest;
+                        if(!readMem16(si, segment, src) || !readMem16(di, Reg16::ES, dest))
+                            break;
 
                         doSub(src, dest, flags);
                     }
@@ -3659,15 +3921,17 @@ void RAM_FUNC(CPU::executeInstruction)()
             {
                 if(operandSize32)
                 {
-                    auto src = readMem32(si, segment);
-                    auto dest = readMem32(di, Reg16::ES);
+                    uint32_t src, dest;
+                    if(!readMem32(si, segment, src) || !readMem32(di, Reg16::ES, dest))
+                        break;
 
                     doSub(src, dest, flags);
                 }
                 else
                 {
-                    auto src = readMem16(si, segment);
-                    auto dest = readMem16(di, Reg16::ES);
+                    uint16_t src, dest;
+                    if(!readMem16(si, segment, src) || !readMem16(di, Reg16::ES, dest))
+                        break;
 
                     doSub(src, dest, flags);
                 }
@@ -3691,7 +3955,9 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0xA8: // TEST AL imm8
         {
-            auto imm = readMem8(addr + 1);
+            uint8_t imm;
+            if(!readMem8(addr + 1, imm))
+                return;
 
             doAnd(reg(Reg8::AL), imm, flags);
 
@@ -3702,13 +3968,19 @@ void RAM_FUNC(CPU::executeInstruction)()
         {
             if(operandSize32)
             {
-                uint32_t imm = readMem32(addr + 1);
+                uint32_t imm;
+                if(!readMem32(addr + 1, imm))
+                    return;
+
                 doAnd(reg(Reg32::EAX), imm, flags);
                 reg(Reg32::EIP) += 4;
             }
             else
             {
-                uint16_t imm = readMem16(addr + 1);
+                uint16_t imm;
+                if(!readMem16(addr + 1, imm))
+                    return;
+
                 doAnd(reg(Reg16::AX), imm, flags);
                 reg(Reg32::EIP) += 2;
             }
@@ -3840,7 +4112,8 @@ void RAM_FUNC(CPU::executeInstruction)()
                 while(count)
                 {
                     // TODO: interrupt
-                    reg(Reg8::AL) = readMem8(si, segment);
+                    if(!readMem8(si, segment, reg(Reg8::AL)))
+                        break;
 
                     si += step;
 
@@ -3857,7 +4130,8 @@ void RAM_FUNC(CPU::executeInstruction)()
             }
             else
             {
-                reg(Reg8::AL) = readMem8(si, segment);
+                if(!readMem8(si, segment, reg(Reg8::AL)))
+                    break;
 
                 si += step;
             }
@@ -3891,9 +4165,12 @@ void RAM_FUNC(CPU::executeInstruction)()
                 {
                     // TODO: interrupt
                     if(operandSize32)
-                        reg(Reg32::EAX) = readMem32(si, segment);
-                    else
-                        reg(Reg16::AX) = readMem16(si, segment);
+                    {
+                        if(!readMem32(si, segment, reg(Reg32::EAX)))
+                            break;
+                    }
+                    else if(!readMem16(si, segment, reg(Reg16::AX)))
+                        break;
 
                     si += step;
 
@@ -3911,9 +4188,12 @@ void RAM_FUNC(CPU::executeInstruction)()
             else
             {
                 if(operandSize32)
-                    reg(Reg32::EAX) = readMem32(si, segment);
-                else
-                    reg(Reg16::AX) = readMem16(si, segment);
+                {
+                    if(!readMem32(si, segment, reg(Reg32::EAX)))
+                        break;
+                }
+                else if(!readMem16(si, segment, reg(Reg16::AX)))
+                    break;
 
                 si += step;
             }
@@ -3942,7 +4222,9 @@ void RAM_FUNC(CPU::executeInstruction)()
                 while(count)
                 {
                     // TODO: interrupt
-                    auto rSrc = readMem8(di, Reg16::ES);
+                    uint8_t rSrc;
+                    if(!readMem8(di, Reg16::ES, rSrc))
+                        break;
 
                     doSub(reg(Reg8::AL), rSrc, flags);
 
@@ -3964,7 +4246,9 @@ void RAM_FUNC(CPU::executeInstruction)()
             }
             else
             {
-                auto rSrc = readMem8(di, Reg16::ES);
+                uint8_t rSrc;
+                if(!readMem8(di, Reg16::ES, rSrc))
+                    break;
 
                 doSub(reg(Reg8::AL), rSrc, flags);
 
@@ -4000,12 +4284,18 @@ void RAM_FUNC(CPU::executeInstruction)()
                     // TODO: interrupt
                     if(operandSize32)
                     {
-                        auto rSrc = readMem32(di, Reg16::ES);
+                        uint32_t rSrc;
+                        if(!readMem32(di, Reg16::ES, rSrc))
+                            break;
+
                         doSub(reg(Reg32::EAX), rSrc, flags);
                     }
                     else
                     {
-                        auto rSrc = readMem16(di, Reg16::ES);
+                        uint16_t rSrc;
+                        if(!readMem16(di, Reg16::ES, rSrc))
+                            break;
+
                         doSub(reg(Reg16::AX), rSrc, flags);
                     }
 
@@ -4029,12 +4319,18 @@ void RAM_FUNC(CPU::executeInstruction)()
             {
                 if(operandSize32)
                 {
-                    auto rSrc = readMem32(di, Reg16::ES);
+                    uint32_t rSrc;
+                    if(!readMem32(di, Reg16::ES, rSrc))
+                        break;
+
                     doSub(reg(Reg32::EAX), rSrc, flags);
                 }
                 else
                 {
-                    auto rSrc = readMem16(di, Reg16::ES);
+                    uint16_t rSrc;
+                    if(!readMem16(di, Reg16::ES, rSrc))
+                        break;
+
                     doSub(reg(Reg16::AX), rSrc, flags);
                 }
 
@@ -4058,8 +4354,8 @@ void RAM_FUNC(CPU::executeInstruction)()
         case 0xB7:
         {
             auto r = static_cast<Reg8>(opcode & 7);
-            reg(r) = readMem8(addr + 1);
             reg(Reg32::EIP)++;
+            readMem8(addr + 1, reg(r));
             break;
         }
 
@@ -4075,24 +4371,30 @@ void RAM_FUNC(CPU::executeInstruction)()
             if(operandSize32)
             {
                 auto r = static_cast<Reg32>(opcode & 7);
-                reg(r) = readMem32(addr + 1);
                 reg(Reg32::EIP) += 4;
+                readMem32(addr + 1, reg(r));
             }
             else
             {
                 auto r = static_cast<Reg16>(opcode & 7);
-                reg(r) = readMem16(addr + 1);
                 reg(Reg32::EIP) += 2;
+                readMem16(addr + 1, reg(r));
             }
             break;
         }
 
         case 0xC0: // shift r/m8 by imm
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto exOp = (modRM >> 3) & 0x7;
     
-            auto count = readMem8(addr + 2 + getDispLen(modRM, addr + 2));
+            uint8_t count;
+            if(!readMem8(addr + 2 + getDispLen(modRM, addr + 2), count))
+                return;
+    
             reg(Reg32::EIP) += 2;
 
             auto v = readRM8(modRM, addr);
@@ -4102,11 +4404,16 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0xC1: // shift r/m16 by imm
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto exOp = (modRM >> 3) & 0x7;
     
-            auto count = readMem8(addr + 2 + getDispLen(modRM, addr + 2));
-    
+            uint8_t count;
+            if(!readMem8(addr + 2 + getDispLen(modRM, addr + 2), count))
+                return;
+
             reg(Reg32::EIP) += 2;
 
             if(operandSize32)
@@ -4125,11 +4432,14 @@ void RAM_FUNC(CPU::executeInstruction)()
     
         case 0xC2: // RET near, add to SP
         {
+            uint16_t imm;
+            if(!readMem16(addr + 1, imm))
+                return;
+            
             // pop from stack
             auto newIP = pop(operandSize32);
 
             // add imm to SP
-            auto imm = readMem16(addr + 1);
             reg(Reg16::SP) += imm;
 
             setIP(newIP);
@@ -4153,11 +4463,16 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0xC6: // MOV imm8 -> r/m
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             assert(((modRM >> 3) & 0x7) == 0);
 
             int immOff = 2 + getDispLen(modRM, addr + 2);
-            auto imm = readMem8(addr + immOff);
+            uint8_t imm;
+            if(!readMem8(addr + immOff, imm))
+                return;
 
             reg(Reg32::EIP) += 2;
 
@@ -4167,20 +4482,29 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0xC7: // MOV imm16 -> r/m
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             assert(((modRM >> 3) & 0x7) == 0);
 
             int immOff = 2 + getDispLen(modRM, addr + 2);
 
             if(operandSize32)
             {
-                auto imm = readMem32(addr + immOff);
+                uint32_t imm;
+                if(!readMem32(addr + immOff, imm))
+                    return;
+
                 reg(Reg32::EIP) += 5;
                 writeRM32(modRM, imm, addr);
             }
             else
             {
-                auto imm = readMem16(addr + immOff);
+                uint16_t imm;
+                if(!readMem16(addr + immOff, imm))
+                    return;
+
                 reg(Reg32::EIP) += 3;
                 writeRM16(modRM, imm, addr);
             }
@@ -4189,8 +4513,12 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0xC8: // ENTER
         {
-            uint16_t allocSize = readMem16(addr + 1);
-            int nestingLevel = readMem8(addr + 3) % 32;
+            uint16_t allocSize;
+            uint8_t nestingLevel;
+            if(!readMem16(addr + 1, allocSize) || !readMem8(addr + 3, nestingLevel))
+                return;
+            
+            nestingLevel %= 32;
 
             push(reg(Reg32::EBP), operandSize32);
 
@@ -4207,9 +4535,15 @@ void RAM_FUNC(CPU::executeInstruction)()
                     if(!stackAddrSize32)
                         bp &= 0xFFFF;
 
-                    uint32_t val = readMem16(bp, ss);
+                    uint32_t val;
                     if(operandSize32)
-                        val |= readMem16(bp + 2, ss) << 16;
+                        readMem32(bp, ss, val);
+                    else
+                    {
+                        uint16_t tmp;
+                        readMem16(bp, ss, tmp);
+                        val = tmp;
+                    }
 
                     push(val, operandSize32);
                 }
@@ -4265,6 +4599,11 @@ void RAM_FUNC(CPU::executeInstruction)()
                     break;
             }
 
+            // read the offset if needed
+            uint16_t imm = 0;
+            if(opcode == 0xCA && !readMem16(addr + 1, imm))
+                return;
+
             // pop IP
             auto newIP = pop(operandSize32);
 
@@ -4274,7 +4613,6 @@ void RAM_FUNC(CPU::executeInstruction)()
             if(opcode == 0xCA)
             {
                 // add imm to SP
-                auto imm = readMem16(addr + 1);
                 if(stackAddrSize32)
                     reg(Reg32::ESP) += imm;
                 else
@@ -4339,7 +4677,10 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0xCD: // INT
         {
-            auto imm = readMem8(addr + 1);
+            uint8_t imm;
+            if(!readMem8(addr + 1, imm))
+                return;
+
             reg(Reg32::EIP)++;
             serviceInterrupt(imm);
             break;
@@ -4414,7 +4755,9 @@ void RAM_FUNC(CPU::executeInstruction)()
             else if(flags & Flag_NT) // task return
             {
                 auto &curTSSDesc = getCachedSegmentDescriptor(Reg16::TR);
-                taskSwitch(readMem16(curTSSDesc.base), reg(Reg32::EIP), TaskSwitchSource::IntRet);
+                uint16_t prevTSS;
+                readMem16(curTSSDesc.base, prevTSS);
+                taskSwitch(prevTSS, reg(Reg32::EIP), TaskSwitchSource::IntRet);
             }
             else
             {
@@ -4510,7 +4853,10 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0xD0: // shift r/m8 by 1
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto exOp = (modRM >> 3) & 0x7;
             reg(Reg32::EIP)++;
 
@@ -4523,7 +4869,10 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0xD1: // shift r/m16 by 1
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto exOp = (modRM >> 3) & 0x7;
             reg(Reg32::EIP)++;
     
@@ -4544,7 +4893,10 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0xD2: // shift r/m8 by cl
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto exOp = (modRM >> 3) & 0x7;
             reg(Reg32::EIP)++;
 
@@ -4557,7 +4909,10 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0xD3: // shift r/m16 by cl
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto exOp = (modRM >> 3) & 0x7;
             reg(Reg32::EIP)++;
 
@@ -4579,7 +4934,9 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0xD4: // AAM
         {
-            auto imm = readMem8(addr + 1);
+            uint8_t imm;
+            if(!readMem8(addr + 1, imm))
+                return;
 
             auto v = reg(Reg8::AL);
 
@@ -4607,7 +4964,9 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0xD5: // AAD
         {
-            auto imm = readMem8(addr + 1);
+            uint8_t imm;
+            if(!readMem8(addr + 1, imm))
+                return;
 
             uint8_t res = reg(Reg8::AL) + reg(Reg8::AH) * imm;
 
@@ -4628,7 +4987,7 @@ void RAM_FUNC(CPU::executeInstruction)()
             auto addr = (reg(Reg16::BX) + reg(Reg8::AL)) & 0xFFFF;
             auto segment = segmentOverride == Reg16::AX ? Reg16::DS : segmentOverride;
 
-            reg(Reg8::AL) = readMem8(addr, segment);
+            readMem8(addr, segment, reg(Reg8::AL));
             break;
         }
 
@@ -4645,7 +5004,9 @@ void RAM_FUNC(CPU::executeInstruction)()
                 fault(Fault::NM);
             else
             {
-                auto modRM = readMem8(addr + 1);
+                uint8_t modRM;
+                if(!readMem8(addr + 1, modRM))
+                    return;
 
                 readRM8(modRM, addr); // we need to at least decode it
 
@@ -4656,7 +5017,9 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0xE0: // LOOPNE/LOOPNZ
         {
-            auto off = static_cast<int8_t>(readMem8(addr + 1));
+            int32_t off;
+            if(!readMem8(addr + 1, off))
+                return;
 
             uint32_t count;
 
@@ -4676,7 +5039,9 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0xE1: // LOOPE/LOOPZ
         {
-            auto off = static_cast<int8_t>(readMem8(addr + 1));
+            int32_t off;
+            if(!readMem8(addr + 1, off))
+                return;
 
             uint32_t count;
 
@@ -4696,7 +5061,9 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0xE2: // LOOP
         {
-            auto off = static_cast<int8_t>(readMem8(addr + 1));
+            int32_t off;
+            if(!readMem8(addr + 1, off))
+                return;
 
             uint32_t count;
 
@@ -4716,7 +5083,9 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0xE3: // JCXZ
         {
-            auto off = static_cast<int8_t>(readMem8(addr + 1));
+            int32_t off;
+            if(!readMem8(addr + 1, off))
+                return;
 
             auto val = addressSize32 ? reg(Reg32::ECX) : reg(Reg16::CX);
 
@@ -4729,9 +5098,9 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0xE4: // IN AL from imm8
         {
-            auto port = readMem8(addr + 1);
+            uint8_t port;
     
-            if(checkIOPermission(port))
+            if(readMem8(addr + 1, port) && checkIOPermission(port))
             {
                 reg(Reg8::AL) = sys.readIOPort(port);
 
@@ -4741,9 +5110,9 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0xE5: // IN AX from imm8
         {
-            auto port = readMem8(addr + 1);
+            uint8_t port;
 
-            if(checkIOPermission(port))
+            if(readMem8(addr + 1, port) && checkIOPermission(port))
             {
                 if(operandSize32)
                     reg(Reg32::EAX) = sys.readIOPort16(port) | sys.readIOPort16(port + 2) << 16;
@@ -4756,9 +5125,9 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0xE6: // OUT AL to imm8
         {
-            auto port = readMem8(addr + 1);
+            uint8_t port;
 
-            if(checkIOPermission(port))
+            if(readMem8(addr + 1, port) && checkIOPermission(port))
             {
                 auto data = reg(Reg8::AL);
                 reg(Reg32::EIP)++;
@@ -4774,9 +5143,12 @@ void RAM_FUNC(CPU::executeInstruction)()
             int immSize = operandSize32 ? 4 : 2;
             
             if(operandSize32)
-                off = readMem32(addr + 1);
-            else
-                off = readMem16(addr + 1);
+            {
+                if(!readMem32(addr + 1, off))
+                    return;
+            }
+            else if(!readMem16(addr + 1, off))
+                return;
 
             // push
             auto retAddr = reg(Reg32::EIP) + immSize;
@@ -4793,9 +5165,12 @@ void RAM_FUNC(CPU::executeInstruction)()
             int immSize = operandSize32 ? 4 : 2;
             
             if(operandSize32)
-                off = readMem32(addr + 1);
-            else
-                off = readMem16(addr + 1);
+            {
+                if(!readMem32(addr + 1, off))
+                    return;
+            }
+            else if(!readMem16(addr + 1, off))
+                return;
 
             setIP(reg(Reg32::EIP) + immSize + off);
             break;
@@ -4809,16 +5184,21 @@ void RAM_FUNC(CPU::executeInstruction)()
 
             if(operandSize32)
             {
-                newIP = readMem32(addr + 1);
+                if(!readMem32(addr + 1, newIP))
+                    return;
+
                 offset += 4;
             }
             else
             {
-                newIP = readMem16(addr + 1);
+                if(!readMem16(addr + 1, newIP))
+                    return;
+
                 offset += 2;
             }
 
-            newCS = readMem16(addr + offset);
+            if(!readMem16(addr + offset, newCS))
+                return;
 
             auto retAddr = reg(Reg32::EIP) + offset + 1 /*+2 for CS, -1 that was added by fetch*/;
 
@@ -4893,7 +5273,9 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0xEB: // JMP short
         {
-            auto off = static_cast<int8_t>(readMem8(addr + 1));
+            int32_t off;
+            if(!readMem8(addr + 1, off))
+                return;
 
             setIP(reg(Reg32::EIP) + 1 + off);
             break;
@@ -4976,7 +5358,10 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0xF6: // group1 byte
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto exOp = (modRM >> 3) & 0x7;
 
             auto v = readRM8(modRM, addr); // NOT/NEG write back...
@@ -4985,7 +5370,9 @@ void RAM_FUNC(CPU::executeInstruction)()
             {
                 case 0: // TEST imm
                 {
-                    auto imm = readMem8(addr + 2 + getDispLen(modRM, addr + 2));
+                    uint8_t imm;
+                    if(!readMem8(addr + 2 + getDispLen(modRM, addr + 2), imm))
+                        return;
 
                     doAnd(v, imm, flags);
 
@@ -5075,7 +5462,10 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0xF7: // group1 word
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto exOp = (modRM >> 3) & 0x7;
 
             uint32_t v;
@@ -5092,14 +5482,20 @@ void RAM_FUNC(CPU::executeInstruction)()
                     int immOff = 2 + getDispLen(modRM, addr + 2);
                     if(operandSize32)
                     {
-                        uint32_t imm = readMem32(addr + immOff);
+                        uint32_t imm;
+                        if(!readMem32(addr + immOff, imm))
+                            return;
+
                         doAnd(v, imm, flags);
 
                         reg(Reg32::EIP) += 5;
                     }
                     else
                     {
-                        uint16_t imm = readMem16(addr + immOff);
+                        uint16_t imm;
+                        if(!readMem16(addr + immOff, imm))
+                            return;
+
                         doAnd(uint16_t(v), imm, flags);
 
                         reg(Reg32::EIP) += 3;
@@ -5323,7 +5719,10 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0xFE: // group2 byte
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto exOp = (modRM >> 3) & 0x7;
 
             auto v = readRM8(modRM, addr);
@@ -5356,7 +5755,10 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0xFF: // group2 word
         {
-            auto modRM = readMem8(addr + 1);
+            uint8_t modRM;
+            if(!readMem8(addr + 1, modRM))
+                return;
+
             auto exOp = (modRM >> 3) & 0x7;
 
             bool isReg = (modRM >> 6) == 3;
@@ -5413,9 +5815,10 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                     // need the addr again...
                     auto [offset, segment] = getEffectiveAddress(modRM >> 6, modRM & 7, true, addr);
-                    auto newCS = readMem16(offset + (operandSize32 ? 4 : 2), segment);
 
-                    farCall(newCS, v, reg(Reg32::EIP) + 1, operandSize32, stackAddrSize32);
+                    uint16_t newCS;
+                    if(readMem16(offset + (operandSize32 ? 4 : 2), segment, newCS))
+                        farCall(newCS, v, reg(Reg32::EIP) + 1, operandSize32, stackAddrSize32);
                     break;
                 }
                 case 4: // JMP near indirect
@@ -5429,7 +5832,8 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                     // need the addr again...
                     auto [offset, segment] = getEffectiveAddress(modRM >> 6, modRM & 7, true, addr);
-                    auto newCS = readMem16(offset + (operandSize32 ? 4 : 2), segment);
+                    uint16_t newCS;
+                    readMem16(offset + (operandSize32 ? 4 : 2), segment, newCS);
 
                     setSegmentReg(Reg16::CS, newCS);
                     setIP(v);
@@ -5457,19 +5861,19 @@ void RAM_FUNC(CPU::executeInstruction)()
     }
 }
 
-uint8_t RAM_FUNC(CPU::readMem8)(uint32_t offset, Reg16 segment)
+bool RAM_FUNC(CPU::readMem8)(uint32_t offset, Reg16 segment, uint8_t &data)
 {
-    return readMem8(offset + getSegmentOffset(segment));
+    return readMem8(offset + getSegmentOffset(segment), data);
 }
 
-uint16_t RAM_FUNC(CPU::readMem16)(uint32_t offset, Reg16 segment)
+bool RAM_FUNC(CPU::readMem16)(uint32_t offset, Reg16 segment, uint16_t &data)
 {
-    return readMem16(offset + getSegmentOffset(segment));
+    return readMem16(offset + getSegmentOffset(segment), data);
 }
 
-uint32_t RAM_FUNC(CPU::readMem32)(uint32_t offset, Reg16 segment)
+bool RAM_FUNC(CPU::readMem32)(uint32_t offset, Reg16 segment, uint32_t &data)
 {
-    return readMem32(offset + getSegmentOffset(segment));
+    return readMem32(offset + getSegmentOffset(segment), data);
 }
 
 bool RAM_FUNC(CPU::writeMem8)(uint32_t offset, Reg16 segment, uint8_t data)
@@ -5493,25 +5897,29 @@ bool RAM_FUNC(CPU::writeMem32)(uint32_t offset, Reg16 segment, uint32_t data)
     return writeMem32(offset + getSegmentOffset(segment), data);
 }
 
-uint8_t RAM_FUNC(CPU::readMem8)(uint32_t offset)
+bool RAM_FUNC(CPU::readMem8)(uint32_t offset, uint8_t &data)
 {
-    return sys.readMem(getPhysicalAddress(offset));
+    data = sys.readMem(getPhysicalAddress(offset));
+    return true;
 }
 
-uint16_t RAM_FUNC(CPU::readMem16)(uint32_t offset)
+bool RAM_FUNC(CPU::readMem16)(uint32_t offset, uint16_t &data)
 {
     auto physAddr = getPhysicalAddress(offset);
     // FIXME: broken on page boundary
-    return sys.readMem(physAddr) | sys.readMem(physAddr + 1) << 8;
+    data = sys.readMem(physAddr) | sys.readMem(physAddr + 1) << 8;
+    return true;
 }
 
-uint32_t RAM_FUNC(CPU::readMem32)(uint32_t offset)
+bool RAM_FUNC(CPU::readMem32)(uint32_t offset, uint32_t &data)
 {
     auto physAddr = getPhysicalAddress(offset);
-    return sys.readMem(physAddr + 0)       |
+    data = sys.readMem(physAddr + 0)       |
            sys.readMem(physAddr + 1) <<  8 |
            sys.readMem(physAddr + 2) << 16 |
            sys.readMem(physAddr + 3) << 24;
+
+    return true;
 }
 
 bool RAM_FUNC(CPU::writeMem8)(uint32_t offset, uint8_t data)
@@ -5597,7 +6005,9 @@ std::tuple<uint32_t, CPU::Reg16> RAM_FUNC(CPU::getEffectiveAddress)(int mod, int
 
             case 4: // SIB
             {
-                auto sib = readMem8(addr + 2);
+                uint8_t sib;
+                readMem8(addr + 2, sib);
+                // FIXME: faults;
                 addr++; // everything is now offset by a byte
 
                 if(!rw)
@@ -5610,7 +6020,7 @@ std::tuple<uint32_t, CPU::Reg16> RAM_FUNC(CPU::getEffectiveAddress)(int mod, int
                 if(mod == 0 && base == Reg32::EBP)
                 {
                     // disp32 instead of base
-                    memAddr = readMem32(addr + 2);
+                    readMem32(addr + 2, memAddr);
 
                     if(!rw)
                         reg(Reg32::EIP) += 4;
@@ -5630,7 +6040,7 @@ std::tuple<uint32_t, CPU::Reg16> RAM_FUNC(CPU::getEffectiveAddress)(int mod, int
             case 5: // ~the same as 6 for 16-bit
                 if(mod == 0) // direct
                 {
-                    memAddr = readMem32(addr + 2);
+                    readMem32(addr + 2, memAddr);
 
                     if(!rw)
                         reg(Reg32::EIP) += 4;
@@ -5671,7 +6081,7 @@ std::tuple<uint32_t, CPU::Reg16> RAM_FUNC(CPU::getEffectiveAddress)(int mod, int
             case 6:
                 if(mod == 0) // direct
                 {
-                    memAddr = readMem16(addr + 2);
+                    readMem16(addr + 2, memAddr);
 
                     if(!rw)
                         reg(Reg32::EIP) += 2;
@@ -5692,7 +6102,8 @@ std::tuple<uint32_t, CPU::Reg16> RAM_FUNC(CPU::getEffectiveAddress)(int mod, int
     // add disp
     if(mod == 1)
     {
-        uint32_t disp = readMem8(addr + 2);
+        uint32_t disp;
+        readMem8(addr + 2, disp);
 
         // sign extend
         if(disp & 0x80)
@@ -5707,7 +6118,8 @@ std::tuple<uint32_t, CPU::Reg16> RAM_FUNC(CPU::getEffectiveAddress)(int mod, int
     {
         if(addressSize32) // 32bit
         {
-            uint32_t disp = readMem32(addr + 2);
+            uint32_t disp;
+            readMem32(addr + 2, disp);
             if(!rw)
                 reg(Reg32::EIP) += 4;
 
@@ -5715,7 +6127,8 @@ std::tuple<uint32_t, CPU::Reg16> RAM_FUNC(CPU::getEffectiveAddress)(int mod, int
         }
         else //16bit
         {
-            uint16_t disp = readMem16(addr + 2);
+            uint16_t disp;
+            readMem16(addr + 2, disp);
 
             if(!rw)
                 reg(Reg32::EIP) += 2;
@@ -5755,16 +6168,22 @@ CPU::SegmentDescriptor CPU::loadSegmentDescriptor(uint16_t selector)
     else
         addr += gdtBase;
 
-    desc.base = readMem8(addr + 2)
-              | readMem8(addr + 3) <<  8
-              | readMem8(addr + 4) << 16
-              | readMem8(addr + 7) << 24;
+    uint8_t descBytes[8];
 
-    desc.limit = readMem8(addr + 0)
-               | readMem8(addr + 1) << 8
-               | (readMem8(addr + 6) & 0xF) << 16;
+    // FIXME: faults?
+    for(int i = 0; i < 8; i++)
+        readMem8(addr + i, descBytes[i]);
 
-    desc.flags = readMem8(addr + 5) << 16 | (readMem8(addr + 6) & 0xF0) << 8;
+    desc.base = descBytes[2]
+              | descBytes[3] <<  8
+              | descBytes[4] << 16
+              | descBytes[7] << 24;
+
+    desc.limit =  descBytes[0]
+               |  descBytes[1] << 8
+               | (descBytes[6] & 0xF) << 16;
+
+    desc.flags = descBytes[5] << 16 | (descBytes[6] & 0xF0) << 8;
 
     // 4k granularity
     if(desc.flags & SD_Granularity)
@@ -5949,14 +6368,14 @@ std::tuple<uint32_t, uint16_t> CPU::getTSSStackPointer(int dpl)
 
     if(descType == SD_SysTypeTSS32 || descType == SD_SysTypeBusyTSS32) // 32 bit
     {
-        newSP = readMem32(tsDesc.base + 4 + dpl * 8 + 0); // ESP[DPL]
-        newSS = readMem16(tsDesc.base + 4 + dpl * 8 + 4); // SS[DPL]
+        readMem32(tsDesc.base + 4 + dpl * 8 + 0, newSP); // ESP[DPL]
+        readMem16(tsDesc.base + 4 + dpl * 8 + 4, newSS); // SS[DPL]
     }
     else // 16 bit
     {
         assert(descType == SD_SysTypeTSS16 || descType == SD_SysTypeBusyTSS16);
-        newSP = readMem16(tsDesc.base + 2 + dpl * 4 + 0); // SP[DPL]
-        newSS = readMem16(tsDesc.base + 2 + dpl * 4 + 2); // SS[DPL]
+        readMem16(tsDesc.base + 2 + dpl * 4 + 0, newSP); // SP[DPL]
+        readMem16(tsDesc.base + 2 + dpl * 4 + 2, newSS); // SS[DPL]
     }
 
     return {newSP, newSS};
@@ -5982,7 +6401,9 @@ bool CPU::checkIOPermission(uint16_t addr)
 
     if(descType == SD_SysTypeTSS32 || descType == SD_SysTypeBusyTSS32) // 32 bit
     {
-        auto ioMapBase = readMem16(tsDesc.base + 0x66);
+        uint16_t ioMapBase;
+        readMem16(tsDesc.base + 0x66, ioMapBase);
+
         uint32_t byteAddr = ioMapBase + addr / 8;
 
         // out of bounds
@@ -5992,7 +6413,8 @@ bool CPU::checkIOPermission(uint16_t addr)
             return false;
         }
 
-        auto mapByte = readMem8(tsDesc.base + byteAddr);
+        uint8_t mapByte;
+        readMem8(tsDesc.base + byteAddr, mapByte);
 
         // allowed if bit cleared
         // TODO: need to check multiple bits for 16/32bit port access
@@ -6088,7 +6510,9 @@ uint8_t RAM_FUNC(CPU::readRM8)(uint8_t modRM, uint32_t addr, int additionalOffse
     if(mod != 3)
     {
         auto [offset, segment] = getEffectiveAddress(mod, rm, false, addr);
-        return readMem8(offset + additionalOffset, segment);
+        uint8_t v;
+        readMem8(offset + additionalOffset, segment, v);
+        return v;
     }
     else
         return reg(static_cast<Reg8>(rm));
@@ -6102,7 +6526,9 @@ uint16_t RAM_FUNC(CPU::readRM16)(uint8_t modRM, uint32_t addr, int additionalOff
     if(mod != 3)
     {
         auto [offset, segment] = getEffectiveAddress(mod, rm, false, addr);
-        return readMem16(offset + additionalOffset, segment);
+        uint16_t v;
+        readMem16(offset + additionalOffset, segment, v);
+        return v;
     }
     else
         return reg(static_cast<Reg16>(rm));
@@ -6116,7 +6542,9 @@ uint32_t RAM_FUNC(CPU::readRM32)(uint8_t modRM, uint32_t addr, int additionalOff
     if(mod != 3)
     {
         auto [offset, segment] = getEffectiveAddress(mod, rm, false, addr);
-        return readMem32(offset + additionalOffset, segment);
+        uint32_t v;
+        readMem32(offset + additionalOffset, segment, v);
+        return v;
     }
     else
         return reg(static_cast<Reg32>(rm));
@@ -6173,7 +6601,10 @@ bool RAM_FUNC(CPU::writeRM32)(uint8_t modRM, uint32_t v, uint32_t addr, bool rw,
 template <CPU::ALUOp8 op, bool d, int regCycles, int memCycles>
 void CPU::doALU8(uint32_t addr)
 {
-    auto modRM = readMem8(addr + 1);
+    uint8_t modRM;
+    if(!readMem8(addr + 1, modRM))
+        return;
+
     auto r = static_cast<Reg8>((modRM >> 3) & 0x7);
     reg(Reg32::EIP)++;
 
@@ -6198,7 +6629,10 @@ void CPU::doALU8(uint32_t addr)
 template <CPU::ALUOp16 op, bool d, int regCycles, int memCycles>
 void CPU::doALU16(uint32_t addr)
 {
-    auto modRM = readMem8(addr + 1);
+    uint8_t modRM;
+    if(!readMem8(addr + 1, modRM))
+        return;
+
     auto r = static_cast<Reg16>((modRM >> 3) & 0x7);
     reg(Reg32::EIP)++;
 
@@ -6223,7 +6657,10 @@ void CPU::doALU16(uint32_t addr)
 template <CPU::ALUOp32 op, bool d, int regCycles, int memCycles>
 void CPU::doALU32(uint32_t addr)
 {
-    auto modRM = readMem8(addr + 1);
+    uint8_t modRM;
+    if(!readMem8(addr + 1, modRM))
+        return;
+
     auto r = static_cast<Reg32>((modRM >> 3) & 0x7);
     reg(Reg32::EIP)++;
 
@@ -6248,7 +6685,10 @@ void CPU::doALU32(uint32_t addr)
 template <CPU::ALUOp8 op>
 void CPU::doALU8AImm(uint32_t addr)
 {
-    auto imm = readMem8(addr + 1);
+    uint8_t imm;
+    
+    if(!readMem8(addr + 1, imm))
+        return;
 
     reg(Reg8::AL) = op(reg(Reg8::AL), imm, flags);
 
@@ -6258,7 +6698,10 @@ void CPU::doALU8AImm(uint32_t addr)
 template <CPU::ALUOp16 op>
 void CPU::doALU16AImm(uint32_t addr)
 {
-    uint16_t imm = readMem16(addr + 1);
+    uint16_t imm;
+    
+    if(!readMem16(addr + 1, imm))
+        return;
 
     reg(Reg16::AX) = op(reg(Reg16::AX), imm, flags);
 
@@ -6268,7 +6711,10 @@ void CPU::doALU16AImm(uint32_t addr)
 template <CPU::ALUOp32 op>
 void CPU::doALU32AImm(uint32_t addr)
 {
-    uint32_t imm = readMem32(addr + 1);
+    uint32_t imm;
+    
+    if(!readMem32(addr + 1, imm))
+        return;
 
     reg(Reg32::EAX) = op(reg(Reg32::EAX), imm, flags);
 
@@ -6408,7 +6854,12 @@ void CPU::farCall(uint32_t newCS, uint32_t newIP, uint32_t retAddr, bool operand
 
                         for(int i = 0; i < temp; i++)
                         {
-                            auto v = is32 ? readMem32(copyAddr + i * 4) : readMem16(copyAddr + i * 2);
+                            uint32_t v;
+                            if(is32)
+                                readMem32(copyAddr + i * 4, v);
+                            else
+                                readMem16(copyAddr + i * 2, v);
+
                             doPush(v, is32, stackAddress32);
                         }
 
@@ -6487,7 +6938,10 @@ void CPU::farCall(uint32_t newCS, uint32_t newIP, uint32_t retAddr, bool operand
 // LES/LDS/...
 void CPU::loadFarPointer(uint32_t addr, Reg16 segmentReg, bool operandSize32)
 {
-    auto modRM = readMem8(addr + 1);
+    uint8_t modRM;
+    if(!readMem8(addr + 1, modRM))
+        return;
+
     auto mod = modRM >> 6;
     auto r = (modRM >> 3) & 0x7;
     auto rm = modRM & 7;
@@ -6498,16 +6952,18 @@ void CPU::loadFarPointer(uint32_t addr, Reg16 segmentReg, bool operandSize32)
 
     if(operandSize32)
     {
-        auto v = readMem32(offset, segment);
-        if(!setSegmentReg(segmentReg, readMem16(offset + 4, segment)))
+        uint32_t v;
+        uint16_t segV;
+        if(!readMem32(offset, segment, v) || !readMem16(offset + 4, segment, segV) || !setSegmentReg(segmentReg, segV))
             return;
 
         reg(static_cast<Reg32>(r)) = v;
     }
     else
     {
-        auto v = readMem16(offset, segment);
-        if(!setSegmentReg(segmentReg, readMem16(offset + 2, segment)))
+        uint16_t v;
+        uint16_t segV;
+        if(!readMem16(offset, segment, v) || !readMem16(offset + 2, segment, segV) || !setSegmentReg(segmentReg, segV))
             return;
 
         reg(static_cast<Reg16>(r)) = v;
@@ -6587,7 +7043,9 @@ bool CPU::taskSwitch(uint16_t selector, uint32_t retAddr, TaskSwitchSource sourc
     {
         tssDesc.flags |= 2 << 16; // in the cache too
         auto addr = (selector >> 3) * 8 + gdtBase;
-        writeMem8(addr + 5, readMem8(addr + 5) | 2);
+        uint8_t access;
+        readMem8(addr + 5, access);
+        writeMem8(addr + 5, access | 2);
     }
 
     // load new TSS
@@ -6600,7 +7058,9 @@ bool CPU::taskSwitch(uint16_t selector, uint32_t retAddr, TaskSwitchSource sourc
     if(source != TaskSwitchSource::Call)
     {
         auto addr = (oldTR >> 3) * 8 + gdtBase;
-        writeMem8(addr + 5, readMem8(addr + 5) & ~2);
+        uint8_t access;
+        readMem8(addr + 5, access);
+        writeMem8(addr + 5, access & ~2);
     }
     else // otherwise set the back-link (same offset/size in 16/32bit TSS)
         writeMem16(tssDesc.base + 0, oldTR);
@@ -6608,31 +7068,34 @@ bool CPU::taskSwitch(uint16_t selector, uint32_t retAddr, TaskSwitchSource sourc
     // load registers from new task
     if(sysType == SD_SysTypeTSS16)
     {
-        flags = (flags & 0xFFFF0000) | readMem16(tssDesc.base + 0x10);
+        uint16_t tmp;
+        readMem16(tssDesc.base + 0x10, tmp);
+        flags = (flags & 0xFFFF0000) | tmp;
 
-        reg(Reg16::AX) = readMem16(tssDesc.base + 0x12);
-        reg(Reg16::CX) = readMem16(tssDesc.base + 0x14);
-        reg(Reg16::DX) = readMem16(tssDesc.base + 0x16);
-        reg(Reg16::BX) = readMem16(tssDesc.base + 0x18);
-        reg(Reg16::SP) = readMem16(tssDesc.base + 0x1a);
-        reg(Reg16::BP) = readMem16(tssDesc.base + 0x1c);
-        reg(Reg16::SI) = readMem16(tssDesc.base + 0x1e);
-        reg(Reg16::DI) = readMem16(tssDesc.base + 0x20);
+        readMem16(tssDesc.base + 0x12, reg(Reg16::AX));
+        readMem16(tssDesc.base + 0x14, reg(Reg16::CX));
+        readMem16(tssDesc.base + 0x16, reg(Reg16::DX));
+        readMem16(tssDesc.base + 0x18, reg(Reg16::BX));
+        readMem16(tssDesc.base + 0x1a, reg(Reg16::SP));
+        readMem16(tssDesc.base + 0x1c, reg(Reg16::BP));
+        readMem16(tssDesc.base + 0x1e, reg(Reg16::SI));
+        readMem16(tssDesc.base + 0x20, reg(Reg16::DI));
 
-        reg(Reg32::EIP) = readMem16(tssDesc.base + 0x0e);
+        readMem16(tssDesc.base + 0x0e, tmp);
+        reg(Reg32::EIP) = tmp;
 
 
         // load LDT before the segment selectors so local selectors use the correct table
-        if(!setLDT(readMem16(tssDesc.base + 0x2a)))
+        if(!readMem16(tssDesc.base + 0x2a, tmp) || !setLDT(tmp))
             return false;
 
-        if(!setSegmentReg(Reg16::ES, readMem16(tssDesc.base + 0x22)))
+        if(!readMem16(tssDesc.base + 0x22, tmp) || !setSegmentReg(Reg16::ES, tmp))
             return false;
-        if(!setSegmentReg(Reg16::CS, readMem16(tssDesc.base + 0x24)))
+        if(!readMem16(tssDesc.base + 0x24, tmp) || !setSegmentReg(Reg16::CS, tmp))
             return false;
-        if(!setSegmentReg(Reg16::SS, readMem16(tssDesc.base + 0x26)))
+        if(!readMem16(tssDesc.base + 0x26, tmp) || !setSegmentReg(Reg16::SS, tmp))
             return false;
-        if(!setSegmentReg(Reg16::DS, readMem16(tssDesc.base + 0x28)))
+        if(!readMem16(tssDesc.base + 0x28, tmp) || !setSegmentReg(Reg16::DS, tmp))
             return false;
     }
 
@@ -6669,9 +7132,18 @@ void RAM_FUNC(CPU::serviceInterrupt)(uint8_t vector)
     if(isProtectedMode())
     {
         auto addr = idtBase + vector * 8;
-        auto offset = readMem16(addr) | readMem16(addr + 6) << 16;
-        auto selector = readMem16(addr + 2);
-        auto access = readMem8(addr + 5);
+
+        uint32_t offset;
+        uint16_t tmp;
+        uint16_t selector;
+        uint8_t access;
+
+        readMem16(addr, offset);
+        readMem16(addr + 6, tmp);
+        readMem16(addr + 2, selector);
+        readMem8(addr + 5, access);
+
+        offset |= tmp << 16;
 
         assert(access & (1 << 7)); // present
 
@@ -6791,8 +7263,8 @@ void RAM_FUNC(CPU::serviceInterrupt)(uint8_t vector)
 
         auto addr = idtBase + vector * 4;
 
-        newIP = readMem16(addr);
-        newCS = readMem16(addr + 2);
+        readMem16(addr, newIP);
+        readMem16(addr + 2, newCS);
 
         push32 = false; //?
         clearFlags |= Flag_I;

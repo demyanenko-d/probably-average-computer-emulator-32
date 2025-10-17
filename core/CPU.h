@@ -123,20 +123,27 @@ private:
         uint32_t limit;
     };
 
-    uint8_t readMem8(uint32_t offset, Reg16 segment);
-    uint16_t readMem16(uint32_t offset, Reg16 segment);
-    uint32_t readMem32(uint32_t offset, Reg16 segment);
+    bool readMem8(uint32_t offset, Reg16 segment, uint8_t &data);
+    bool readMem16(uint32_t offset, Reg16 segment, uint16_t &data);
+    bool readMem32(uint32_t offset, Reg16 segment, uint32_t &data);
     bool writeMem8(uint32_t offset, Reg16 segment, uint8_t data);
     bool writeMem16(uint32_t offset, Reg16 segment, uint16_t data);
     bool writeMem32(uint32_t offset, Reg16 segment, uint32_t data);
 
     // some internal stuff that already has a linear address
-    uint8_t readMem8(uint32_t offset);
-    uint16_t readMem16(uint32_t offset);
-    uint32_t readMem32(uint32_t offset);
+    bool readMem8(uint32_t offset, uint8_t &data);
+    bool readMem16(uint32_t offset, uint16_t &data);
+    bool readMem32(uint32_t offset, uint32_t &data);
     bool writeMem8(uint32_t offset, uint8_t data);
     bool writeMem16(uint32_t offset, uint16_t data);
     bool writeMem32(uint32_t offset, uint32_t data);
+
+    // extra helpers
+    bool readMem8 (uint32_t offset, uint32_t &data) {uint8_t  tmp; if(!readMem8 (offset, tmp)) return false; data = tmp; return true;}
+    bool readMem16(uint32_t offset, uint32_t &data) {uint16_t tmp; if(!readMem16(offset, tmp)) return false; data = tmp; return true;}
+    bool readMem8 (uint32_t offset,  int32_t &data) {uint8_t  tmp; if(!readMem8 (offset, tmp)) return false; data = int8_t (tmp); return true;}
+    bool readMem16(uint32_t offset,  int32_t &data) {uint16_t tmp; if(!readMem16(offset, tmp)) return false; data = int16_t(tmp); return true;}
+    bool readMem32(uint32_t offset,  int32_t &data) {uint32_t tmp; if(!readMem32(offset, tmp)) return false; data = int32_t(tmp); return true;}
 
     uint32_t getPhysicalAddress(uint32_t virtAddr);
 
