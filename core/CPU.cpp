@@ -4440,7 +4440,10 @@ void RAM_FUNC(CPU::executeInstruction)()
             auto newIP = pop(operandSize32);
 
             // add imm to SP
-            reg(Reg16::SP) += imm;
+            if(stackAddrSize32)
+                reg(Reg32::ESP) += imm;
+            else
+                reg(Reg16::SP) += imm;
 
             setIP(newIP);
             break;
