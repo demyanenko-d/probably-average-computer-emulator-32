@@ -1757,160 +1757,78 @@ void RAM_FUNC(CPU::executeInstruction)()
                     if(!readMem8(addr + 3 + getDispLen(modRM, addr + 3), bit))
                         return;
 
+                    reg(Reg32::EIP) += 3;
+
                     auto exOp = (modRM >> 3) & 0x7;
+
+                    uint32_t data;
+                    bool value;
+                    int off;
+
+                    if(operandSize32)
+                    {
+                        off = (bit / 32) * 4;
+                        bit &= 31;
+
+                        if(!readRM32(modRM, data, addr + 1, off))
+                            break;
+
+                        value = data & (1 << bit);
+                    }
+                    else
+                    {
+                        off = (bit / 16) * 2;
+                        bit &= 15;
+
+                        uint16_t data16;
+                        if(!readRM16(modRM, data16, addr + 1, off))
+                            break;
+
+                        value = data16 & (1 << bit);
+                        data = data16;
+                    }
 
                     switch(exOp)
                     {
                         case 4: // BT
-                        {
-                            bool value;
-
-                            if(operandSize32)
-                            {
-                                uint32_t data;
-                                if(!readRM32(modRM, data, addr + 1, (bit / 32) * 4))
-                                    break;
-
-                                value = data & (1 << (bit & 31));
-                            }
-                            else
-                            {
-                                uint16_t data;
-                                if(!readRM16(modRM, data, addr + 1, (bit / 16) * 2))
-                                    break;
-
-                                value = data & (1 << (bit & 15));
-                            }
-
-                            if(value)
-                                flags |= Flag_C;
-                            else
-                                flags &= ~Flag_C;
-
-                            reg(Reg32::EIP) += 3;
-                            break;
-                        }
+                            break; // nothing else to do
                         case 5: // BTS
                         {
-                            bool value;
-
                             if(operandSize32)
-                            {
-                                int off = (bit / 32) * 4;
-                                bit &= 31;
-
-                                uint32_t data;
-                                if(!readRM32(modRM, data, addr + 1, off))
-                                    break;
-
-                                value = data & (1 << bit);
-                                if(!writeRM32(modRM, data | 1 << bit, addr + 1, true, off))
-                                    break;
-                            }
+                                writeRM32(modRM, data | 1 << bit, addr + 1, true, off);
                             else
-                            {
-                                int off = (bit / 16) * 2;
-                                bit &= 15;
+                                writeRM16(modRM, data | 1 << bit, addr + 1, true, off);
 
-                                uint16_t data;
-                                if(!readRM16(modRM, data, addr + 1, off))
-                                    break;
-
-                                value = data & (1 << bit);
-                                if(!writeRM16(modRM, data | 1 << bit, addr + 1, true, off))
-                                    break;
-                            }
-
-                            if(value)
-                                flags |= Flag_C;
-                            else
-                                flags &= ~Flag_C;
-
-                            reg(Reg32::EIP) += 3;
                             break;
                         }
                         case 6: // BTR
                         {
-                            bool value;
-
                             if(operandSize32)
-                            {
-                                int off = (bit / 32) * 4;
-                                bit &= 31;
-
-                                uint32_t data;
-                                if(!readRM32(modRM, data, addr + 1, off))
-                                    break;
-
-                                value = data & (1 << bit);
-                                if(!writeRM32(modRM, data & ~(1 << bit), addr + 1, true, off))
-                                    break;
-                            }
+                                writeRM32(modRM, data & ~(1 << bit), addr + 1, true, off);
                             else
-                            {
-                                int off = (bit / 16) * 2;
-                                bit &= 15;
+                                writeRM16(modRM, data & ~(1 << bit), addr + 1, true, off);
 
-                                uint16_t data;
-                                if(!readRM16(modRM, data, addr + 1, off))
-                                    break;
-
-                                value = data & (1 << bit);
-                                if(!writeRM16(modRM, data & ~(1 << bit), addr + 1, true, off))
-                                    break;
-                            }
-
-                            if(value)
-                                flags |= Flag_C;
-                            else
-                                flags &= ~Flag_C;
-
-                            reg(Reg32::EIP) += 3;
                             break;
                         }
                         case 7: // BTC
                         {
-                            bool value;
-
                             if(operandSize32)
-                            {
-                                int off = (bit / 32) * 4;
-                                bit &= 31;
-
-                                uint32_t data;
-                                if(!readRM32(modRM, data, addr + 1, off))
-                                    break;
-
-                                value = data & (1 << bit);
-                                if(!writeRM32(modRM, data ^ ~(1 << bit), addr + 1, true, off))
-                                    break;
-                            }
+                                writeRM32(modRM, data ^ ~(1 << bit), addr + 1, true, off);
                             else
-                            {
-                                int off = (bit / 16) * 2;
-                                bit &= 15;
+                                writeRM16(modRM, data ^ ~(1 << bit), addr + 1, true, off);
 
-                                uint16_t data;
-                                if(!readRM16(modRM, data, addr + 1, off))
-                                    break;
-
-                                value = data & (1 << bit);
-                                if(!writeRM16(modRM, data ^ ~(1 << bit), addr + 1, true, off))
-                                    break;
-                            }
-
-                            if(value)
-                                flags |= Flag_C;
-                            else
-                                flags &= ~Flag_C;
-
-                            reg(Reg32::EIP) += 3;
                             break;
                         }
                         default:
-                            assert(!"invalid 0f ba");
+                            fault(Fault::UD);
                             break;
                     }
+
+                    if(value)
+                        flags |= Flag_C;
+                    else
+                        flags &= ~Flag_C;
+
                     break;
                 }
 
