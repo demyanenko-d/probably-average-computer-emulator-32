@@ -7098,8 +7098,9 @@ void CPU::farCall(uint32_t newCS, uint32_t newIP, uint32_t retAddr, bool operand
                             return;
                         }
 
-                        // setup new stack (this shouldn't fail, but also the checks are redundant...)
-                        setSegmentReg(Reg16::SS, newSS);
+                        // setup new stack
+                        getCachedSegmentDescriptor(Reg16::SS) = loadSegmentDescriptor(newSS);
+                        reg(Reg16::SS) = newSS;
 
                         reg(Reg32::ESP) = newSP;
 
