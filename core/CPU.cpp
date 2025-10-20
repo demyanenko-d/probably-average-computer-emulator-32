@@ -6262,7 +6262,14 @@ bool CPU::getPhysicalAddress(uint32_t virtAddr, uint32_t &physAddr, bool forWrit
     }
 
     // FIXME: check user/supervisor
-    // FIXME: set dirty/accessed
+
+    // set dir accessed
+    if(!(dirEntry & 1 << 5))
+        sys.writeMem(dirEntryAddr, dirEntry | (1 << 5));
+
+    // set page accessed/dirty
+    if(!(pageEntry & 1 << 5) || (forWrite && !(pageEntry & 1 << 6)))
+        sys.writeMem(pageEntryAddr, pageEntry | (1 << 5) | (forWrite ? (1 << 6) : 0));
 
     physAddr = (pageEntry & 0xFFFFF000) | (virtAddr & 0xFFF);
     return true;
