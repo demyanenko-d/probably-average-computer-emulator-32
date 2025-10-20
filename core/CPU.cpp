@@ -6233,13 +6233,6 @@ bool CPU::getPhysicalAddress(uint32_t virtAddr, uint32_t &physAddr, bool forWrit
         return false;
     }
 
-    // writable
-    if(forWrite && !(dirEntry & (1 << 1)))
-    {
-        pageFault(true, forWrite, virtAddr);
-        return false;
-    }
-
     // page table
     auto pageEntryAddr = (dirEntry & 0xFFFFF000) + page * 4;
 
@@ -6254,8 +6247,15 @@ bool CPU::getPhysicalAddress(uint32_t virtAddr, uint32_t &physAddr, bool forWrit
         return false;
     }
 
-    // writable
-    if(forWrite && !(pageEntry & (1 << 1)))
+    // dir writable
+    if(forWrite && cpl == 3 && !(dirEntry & (1 << 1)))
+    {
+        pageFault(true, forWrite, virtAddr);
+        return false;
+    }
+
+    // page writable
+    if(forWrite && cpl == 3 && !(pageEntry & (1 << 1)))
     {
         pageFault(true, forWrite, virtAddr);
         return false;
