@@ -151,6 +151,10 @@ uint8_t VGACard::read(uint16_t addr)
 {
     switch(addr)
     {
+        case 0x3B4: // CRTC address
+        case 0x3D4:
+            return crtcIndex;
+    
         case 0x3B5: // CRTC data
         case 0x3D5:
             return crtcRegs[crtcIndex];
@@ -164,6 +168,8 @@ uint8_t VGACard::read(uint16_t addr)
         case 0x3C0: // attribute address
             return attributeIndex;
 
+        case 0x3C4: // sequencer address
+            return sequencerIndex;
         case 0x3C5: // sequencer data
             switch(sequencerIndex)
             {
@@ -183,6 +189,8 @@ uint8_t VGACard::read(uint16_t addr)
         case 0x3CC: // misc output
             return miscOutput;
 
+        case 0x3CE: // graphics controller index
+            return gfxControllerIndex;
         case 0x3CF: // graphics controller data
             switch(gfxControllerIndex)
             {
