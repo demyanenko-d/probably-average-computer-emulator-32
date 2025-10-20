@@ -36,8 +36,8 @@ void VGACard::drawScanline(int line, uint8_t *output)
         int offset = crtcRegs[0x13];
         int startAddr = crtcRegs[0xD] | crtcRegs[0xC] << 8;
 
-        auto charPtr = plane0 + startAddr + offset * 4 * (line / charHeight);
-        auto attrPtr = plane1 + startAddr + offset * 4 * (line / charHeight);
+        auto charPtr = plane0 + startAddr * 2 + offset * 4 * (line / charHeight);
+        auto attrPtr = plane1 + startAddr * 2 + offset * 4 * (line / charHeight);
 
         for(int i = 0; i < hDispChars; i++)
         {
