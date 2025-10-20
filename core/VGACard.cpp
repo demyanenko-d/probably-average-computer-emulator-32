@@ -186,6 +186,9 @@ uint8_t VGACard::read(uint16_t addr)
             }
             return 0xFF;
 
+        case 0x3C9: // DAC data
+            return dacPalette[dacIndexRead++];
+
         case 0x3CC: // misc output
             return miscOutput;
 
