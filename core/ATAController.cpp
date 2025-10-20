@@ -143,9 +143,9 @@ uint16_t ATAController::read16(uint16_t addr)
                         // clear data request, set ready
                         status |= Status_DRDY;
                         status &= ~Status_DRQ;
-
-                        flagIRQ();
                     }
+
+                    flagIRQ();
                 }
 
                 return ret;
@@ -241,6 +241,8 @@ void ATAController::write(uint16_t addr, uint8_t data)
 
                         status &= ~Status_DRDY;
                         status |= Status_DRQ;
+
+                        flagIRQ();
                     }
                     break;
                 }
