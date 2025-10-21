@@ -1339,8 +1339,8 @@ void RAM_FUNC(CPU::executeInstruction)()
                 }
 
                 case 0xA0: // PUSH FS
-                    push(reg(Reg16::FS), operandSize32);
                     reg(Reg32::EIP)++;
+                    push(reg(Reg16::FS), operandSize32);
                     break;
                 case 0xA1: // POP FS
                 {
@@ -1464,8 +1464,8 @@ void RAM_FUNC(CPU::executeInstruction)()
                 }
 
                 case 0xA8: // PUSH GS
-                    push(reg(Reg16::GS), operandSize32);
                     reg(Reg32::EIP)++;
+                    push(reg(Reg16::GS), operandSize32);
                     break;
                 case 0xA9: // POP GS
                 {
@@ -5371,9 +5371,8 @@ void RAM_FUNC(CPU::executeInstruction)()
 
             // push
             auto retAddr = reg(Reg32::EIP) + immSize;
-            push(retAddr, operandSize32);
-
-            setIP(reg(Reg32::EIP) + immSize + off);
+            if(push(retAddr, operandSize32))
+                setIP(reg(Reg32::EIP) + immSize + off);
             break;
         }
 
@@ -6050,9 +6049,8 @@ void RAM_FUNC(CPU::executeInstruction)()
                 {
                     // push
                     auto retAddr = reg(Reg32::EIP) + 1;
-                    push(retAddr, operandSize32);
-
-                    setIP(v);
+                    if(push(retAddr, operandSize32))
+                        setIP(v);
                     break;
                 }
                 case 3: // CALL far indirect
@@ -6087,9 +6085,9 @@ void RAM_FUNC(CPU::executeInstruction)()
                 }
                 case 6: // PUSH
                 {
+                    reg(Reg32::EIP)++;
                     push(v, operandSize32);
 
-                    reg(Reg32::EIP)++;
                     break;
                 }
                 // 7 is invalid
