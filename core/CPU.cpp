@@ -3610,33 +3610,40 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0x9C: // PUSHF
         {
-            push(flags, operandSize32);
+            if(flags & Flag_VM)
+            {
+                unsigned iopl = (flags & Flag_IOPL) >> 12;
+                if(iopl != 3)
+                {
+                    fault(Fault::GP, 0);
+                    break;
+                }
+            }
+            // VM/RF are cleared
+            push(flags & ~(Flag_R | Flag_VM), operandSize32);
 
             break;
         }
         case 0x9D: // POPF
         {
+            if(flags & Flag_VM) // virtual 8086 mode
+            {
+                unsigned iopl = (flags & Flag_IOPL) >> 12;
+                if(iopl != 3)
+                {
+                    fault(Fault::GP, 0);
+                    break;
+                }
+                // fall through to the protected mode path with CPL == IOPL == 3
+            }
+
             uint32_t newFlags;
             if(!pop(operandSize32, newFlags))
                 break;
 
             uint32_t flagMask;
 
-            if(flags & Flag_VM) // virtual 8086 mode
-            {
-                unsigned iopl = (flags & Flag_IOPL) >> 12;
-                if(iopl == 3)
-                {
-                    flagMask = Flag_C | Flag_P | Flag_A | Flag_Z | Flag_S | Flag_T | Flag_I | Flag_D | Flag_O | Flag_NT;
-                }
-                else
-                {
-                    // GP
-                    printf("V86 POPF trap\n");
-                    exit(1);
-                }
-            }
-            else if(!isProtectedMode() || cpl == 0) // real mode or CPL == 0
+            if(!isProtectedMode() || cpl == 0) // real mode or CPL == 0
                 flagMask = Flag_C | Flag_P | Flag_A | Flag_Z | Flag_S | Flag_T | Flag_I | Flag_D | Flag_O | Flag_IOPL | Flag_NT;
             else // protected mode, CPL > 0
             {
