@@ -4959,11 +4959,9 @@ void RAM_FUNC(CPU::executeInstruction)()
                 if((newFlags & Flag_VM) && cpl == 0)
                 {
                     // return to virtual 8086 mode
+                    assert(operandSize32);
 
-                    flags = newFlags;
-                    setSegmentReg(Reg16::CS, newCS);
-                    setIP(newIP);
-                    cpl = 3;
+                    // make sure to do all the pops before switching mode
 
                     // prepare new stack
                     uint32_t newESP, newSS;
@@ -4971,11 +4969,23 @@ void RAM_FUNC(CPU::executeInstruction)()
                     pop(operandSize32, newSS);
 
                     // pop segments
-                    uint32_t v;
-                    pop(operandSize32, v); setSegmentReg(Reg16::ES, v);
-                    pop(operandSize32, v); setSegmentReg(Reg16::DS, v);
-                    pop(operandSize32, v); setSegmentReg(Reg16::FS, v);
-                    pop(operandSize32, v); setSegmentReg(Reg16::GS, v);
+                    uint32_t newES, newDS, newFS, newGS;
+                    pop(operandSize32, newES);
+                    pop(operandSize32, newDS);
+                    pop(operandSize32, newFS);
+                    pop(operandSize32, newGS);
+
+                    // set new flags and CS (we're now in v86 mode at the new privilege level)
+                    flags = newFlags;
+                    setSegmentReg(Reg16::CS, newCS);
+                    setIP(newIP);
+                    cpl = 3;
+
+                    // ... and set all the new segments after
+                    setSegmentReg(Reg16::ES, newES);
+                    setSegmentReg(Reg16::DS, newDS);
+                    setSegmentReg(Reg16::FS, newFS);
+                    setSegmentReg(Reg16::GS, newGS);
 
                     setSegmentReg(Reg16::SS, newSS);
                     reg(Reg32::ESP) = newESP;
