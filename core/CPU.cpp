@@ -6159,17 +6159,42 @@ bool RAM_FUNC(CPU::readMem8)(uint32_t offset, uint8_t &data)
 
 bool RAM_FUNC(CPU::readMem16)(uint32_t offset, uint16_t &data)
 {
+    // break up access if crossing page boundary
+    if((reg(Reg32::CR0) & (1 << 31)) && (offset & 0xFFF) == 0xFFF)
+    {
+        uint8_t tmp[2];
+
+        if(!readMem8(offset, tmp[0]) || !readMem8(offset + 1, tmp[1]))
+            return false;
+
+        data = tmp[0] | tmp[1] << 8;
+
+        return true;
+    }
+
     uint32_t physAddr;
     if(!getPhysicalAddress(offset, physAddr))
         return false;
 
-    // FIXME: broken on page boundary
     data = sys.readMem(physAddr) | sys.readMem(physAddr + 1) << 8;
     return true;
 }
 
 bool RAM_FUNC(CPU::readMem32)(uint32_t offset, uint32_t &data)
 {
+    // break up access if crossing page boundary
+    if((reg(Reg32::CR0) & (1 << 31)) && (offset & 0xFFF) > 0xFFC)
+    {
+        uint8_t tmp[4];
+
+        if(!readMem8(offset, tmp[0]) || !readMem8(offset + 1, tmp[1]) || !readMem8(offset + 2, tmp[2]) || !readMem8(offset + 3, tmp[3]))
+            return false;
+
+        data = tmp[0] | tmp[1] << 8 | tmp[2] << 16 | tmp[3] << 24;
+
+        return true;
+    }
+
     uint32_t physAddr;
     if(!getPhysicalAddress(offset, physAddr))
         return false;
@@ -6194,6 +6219,13 @@ bool RAM_FUNC(CPU::writeMem8)(uint32_t offset, uint8_t data)
 
 bool RAM_FUNC(CPU::writeMem16)(uint32_t offset, uint16_t data)
 {
+    // break up access if crossing page boundary
+    if((reg(Reg32::CR0) & (1 << 31)) && (offset & 0xFFF) > 0xFFC)
+    {
+        // FIXME: what if the first page is valid, but the second isn't?
+        return writeMem8(offset, data & 0xFF) && writeMem8(offset + 1, data >> 8);
+    }
+
     uint32_t physAddr;
     if(!getPhysicalAddress(offset, physAddr, true))
         return false;
@@ -6205,6 +6237,13 @@ bool RAM_FUNC(CPU::writeMem16)(uint32_t offset, uint16_t data)
 
 bool RAM_FUNC(CPU::writeMem32)(uint32_t offset, uint32_t data)
 {
+    // break up access if crossing page boundary
+    if((reg(Reg32::CR0) & (1 << 31)) && (offset & 0xFFF) > 0xFFC)
+    {
+        return writeMem8(offset    , data & 0xFF) && writeMem8(offset + 1, data >> 8 )
+            && writeMem8(offset + 2, data >> 16 ) && writeMem8(offset + 3, data >> 24);
+    }
+
     uint32_t physAddr;
     if(!getPhysicalAddress(offset, physAddr, true))
         return false;
