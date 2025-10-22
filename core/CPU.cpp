@@ -593,6 +593,7 @@ void RAM_FUNC(CPU::executeInstruction)()
     if(!readMem8(addr, opcode))
         return;
 
+    bool lock = false;
     bool rep = false, repZ = true;
     segmentOverride = Reg16::AX; // not a segment reg, also == 0
     bool operandSizeOverride = false;
@@ -611,6 +612,8 @@ void RAM_FUNC(CPU::executeInstruction)()
             operandSizeOverride = true;
         else if(opcode == 0x67)
             addressSizeOverride = true;
+        else if(opcode == 0xF0) // LOCK
+            lock = true;
         else if(opcode == 0xF2) // REPNE
         {
             rep = true;
@@ -625,6 +628,63 @@ void RAM_FUNC(CPU::executeInstruction)()
             return;
 
         reg(Reg32::EIP)++;
+    }
+
+    // validate LOCK prefix
+    if(lock)
+    {
+        if(opcode == 0x0F)
+        {} // check it when we have the 2nd opcode byte
+        // allow x0-x3,x8-xB for ALU ops
+        else if(opcode < 0x34 && (opcode & 4))
+        {
+            fault(Fault::UD);
+            return;
+        }
+        // nothing in 34-7F, 88-F5
+        // 84/85 are TEST
+        // F8-FD are flag set/clears
+        else if(opcode < 0x80 || (opcode > 0x87 && opcode < 0xF6) || opcode == 0x84 || opcode == 0x85 || (opcode > 0xF7 && opcode < 0xFE))
+        {
+            fault(Fault::UD);
+            return;
+        }
+
+        // now we need to check the r/m
+        uint8_t modRM;
+        if(!readMem8(addr + 1, modRM))
+            return; // give up if we faulted early
+
+        // not a memory operand, can't lock a register
+        if((modRM >> 6) == 3)
+        {
+            fault(Fault::UD);
+            return;
+        }
+
+        auto subOp = (modRM >> 3) & 0x7;
+
+        // ALU with imm, sub op needs to be anything other than 7 (CMP)
+        if(opcode >= 0x80 && opcode <= 0x83 && subOp == 7)
+        {
+            fault(Fault::UD);
+            return;
+        }
+
+        // only NOT/NEG here
+        if((opcode == 0xF6 || opcode == 0xF7) && subOp != 2 && subOp != 3)
+        {
+            fault(Fault::UD);
+            return;
+        }
+
+        // INC/DEC
+        // (technically also for FE, but 0/1 are the only valid values there)
+        if(opcode == 0xFF && subOp > 1)
+        {
+            fault(Fault::UD);
+            return;
+        }
     }
 
     bool operandSize32 = isOperandSize32(operandSizeOverride);
@@ -889,6 +949,29 @@ void RAM_FUNC(CPU::executeInstruction)()
             uint8_t opcode2;
             if(!readMem8(addr + 1, opcode2))
                 return;
+
+            // LOCK prefix validation, part 2
+            if(lock)
+            {
+                // only bit testing ops
+                if(opcode2 != 0xA3 && opcode2 != 0xAB && opcode2 != 0xB3 && opcode2 != 0xBA && opcode2 != 0xBB)
+                {
+                    fault(Fault::UD);
+                    return;
+                }
+
+                // now we need to check the r/m
+                uint8_t modRM;
+                if(!readMem8(addr + 2, modRM))
+                    return; // give up if we faulted early
+
+                // not a memory operand, can't lock a register
+                if((modRM >> 6) == 3)
+                {
+                    fault(Fault::UD);
+                    return;
+                }
+            }
 
             switch(opcode2)
             {
