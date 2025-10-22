@@ -7726,6 +7726,9 @@ void RAM_FUNC(CPU::serviceInterrupt)(uint8_t vector, bool isInt)
                 setSegmentReg(Reg16::SS, newSS);
                 reg(Reg32::ESP) = newSP;
 
+                // update stack address size
+                stackAddrSize32 = isStackAddressSize32();
+
                 push(tmpSS, gate32);
                 push(tmpSP, gate32);
 
