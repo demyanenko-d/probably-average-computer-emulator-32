@@ -6916,7 +6916,8 @@ bool CPU::checkSegmentAccess(Reg16 segment, uint32_t offset, int width, bool wri
     }
 
     // nothing else to check in real mode
-    if(!isProtectedMode() || (flags & Flag_VM))
+    // or if this is SS, as it can't be loaded with null or a read-only segment
+    if(!isProtectedMode() || segment == Reg16::SS)
         return true;
 
     // corner case null descriptor check (we zero the limit, but a byte access at offset 0 might still get through)
@@ -6927,7 +6928,7 @@ bool CPU::checkSegmentAccess(Reg16 segment, uint32_t offset, int width, bool wri
     }
 
     // check writable
-    if(write && ((desc.flags & SD_Executable)|| !(desc.flags & SD_ReadWrite)))
+    if(write && ((desc.flags & SD_Executable) || !(desc.flags & SD_ReadWrite)))
     {
         fault(Fault::GP, 0);
         return false;
