@@ -7351,6 +7351,7 @@ void CPU::farCall(uint32_t newCS, uint32_t newIP, uint32_t retAddr, bool operand
                             return;
 
                         // FIXME: check limit for space for params + SS:SP + CS:IP
+                        auto newSSDesc = loadSegmentDescriptor(newSS);
 
                         // check new IP
                         if(codeSegOffset > codeSegDesc.limit)
@@ -7360,8 +7361,9 @@ void CPU::farCall(uint32_t newCS, uint32_t newIP, uint32_t retAddr, bool operand
                         }
 
                         // setup new stack
-                        getCachedSegmentDescriptor(Reg16::SS) = loadSegmentDescriptor(newSS);
+                        getCachedSegmentDescriptor(Reg16::SS) = newSSDesc;
                         reg(Reg16::SS) = newSS;
+                        stackAddress32 = newSSDesc.flags & SD_Size;
 
                         reg(Reg32::ESP) = newSP;
 
