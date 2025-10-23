@@ -5053,6 +5053,15 @@ void RAM_FUNC(CPU::executeInstruction)()
                 auto &curTSSDesc = getCachedSegmentDescriptor(Reg16::TR);
                 uint16_t prevTSS;
                 readMem16(curTSSDesc.base, prevTSS);
+
+                // NULL or local descriptor
+                // TODO: also check GDT limit, descriptor type and present
+                if(prevTSS < 8)
+                {
+                    fault(Fault::TS, prevTSS & ~3);
+                    break;
+                }
+
                 taskSwitch(prevTSS, reg(Reg32::EIP), TaskSwitchSource::IntRet);
             }
             else
