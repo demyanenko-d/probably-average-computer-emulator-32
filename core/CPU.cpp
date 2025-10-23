@@ -5317,7 +5317,12 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0xD7: // XLAT
         {
-            auto addr = (reg(Reg16::BX) + reg(Reg8::AL)) & 0xFFFF;
+            uint32_t addr;
+            if(addressSize32)
+                addr = reg(Reg32::EBX) + reg(Reg8::AL);
+            else
+                addr = (reg(Reg16::BX) + reg(Reg8::AL)) & 0xFFFF;
+
             auto segment = segmentOverride == Reg16::AX ? Reg16::DS : segmentOverride;
 
             readMem8(addr, segment, reg(Reg8::AL));
