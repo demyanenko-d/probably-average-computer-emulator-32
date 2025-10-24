@@ -206,7 +206,6 @@ void ATAController::write(uint16_t addr, uint8_t data)
                         lbaMidCylinderLow = 0x14;
                         lbaHighCylinderHigh = 0xEB;
                         deviceHead &= (1 << 4); // don't change DEV bit
-                        // TODO: should set these in response to a (non-packet) IDENTIFY too
 
                         status &= ~Status_DRDY;
                     }
@@ -357,6 +356,13 @@ void ATAController::write(uint16_t addr, uint8_t data)
                     {
                         if(io->isATAPI(dev))
                         {
+                            // signature
+                            sectorCount = 1;
+                            lbaLowSector = 1;
+                            lbaMidCylinderLow = 0x14;
+                            lbaHighCylinderHigh = 0xEB;
+                            deviceHead &= (1 << 4); // don't change DEV bit
+
                             status |= Status_ERR;
                             error = Error_ABRT;
                         }
