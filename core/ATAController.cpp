@@ -187,8 +187,6 @@ void ATAController::write(uint16_t addr, uint8_t data)
             deviceHead = data;
             if(!io || !io->isATAPI((deviceHead >> 4) & 1))
                 status |= Status_DRDY; // non-ATAPI is automatically ready
-            else
-                status &= ~Status_DSC;
 
             break;
         case 0x177: // command
@@ -211,7 +209,7 @@ void ATAController::write(uint16_t addr, uint8_t data)
                         lbaHighCylinderHigh = 0xEB;
                         deviceHead &= (1 << 4); // don't change DEV bit
 
-                        status &= ~Status_DRDY;
+                        status &= ~(Status_DRDY | Status_DSC | Status_DRQ | Status_ERR);
                     }
                     else
                         status |= Status_ERR;
