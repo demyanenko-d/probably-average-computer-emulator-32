@@ -719,12 +719,13 @@ void ATAController::doATAPICommand(int device)
 
         case SCSICommand::READ_TOC:
         {
-            // bool msf = sectorBuf[1] & (1 << 1);
+            bool msf = sectorBuf[1] & (1 << 1);
             int format = sectorBuf[2] & 0xF;
-            // uint8_t trackSession = sectorBuf[6];
+            uint8_t trackSession = sectorBuf[6];
 
             // clamp to requested len
-            pioReadLen = std::min(lbaMidCylinderLow | lbaHighCylinderHigh << 8, 12);
+            int len = trackSession == 0xAA ? 12 : 20;
+            pioReadLen = std::min(lbaMidCylinderLow | lbaHighCylinderHigh << 8, len);
             pioReadSectors = 0;
             bufOffset = 0;
 
@@ -735,16 +736,45 @@ void ATAController::doATAPICommand(int device)
             {
                 // claim we have one data track
                 sectorBuf[0] = 0;
-                sectorBuf[1] = 10; // data length
+                sectorBuf[1] = len - 2; // data length
 
                 sectorBuf[2] = sectorBuf[3] = 1; // first/last track
 
-                // track descriptor
-                sectorBuf[4] = 0; // reserved
-                sectorBuf[5] = 0x14; // ADR = position data, CONTROL = data track
-                sectorBuf[6] = 1; // track number
-                sectorBuf[7] = 0; // reserved
-                sectorBuf[8] = sectorBuf[9] = sectorBuf[10] = sectorBuf[11] = 0; // LBA
+                auto trackPtr = sectorBuf + 4;
+
+                auto addTrack = [&msf](uint8_t *trackPtr, uint8_t num, uint32_t lba)
+                {
+                    // track descriptor
+                    trackPtr[0] = 0; // reserved
+                    trackPtr[1] = 0x14; // ADR = position data, CONTROL = data track
+                    trackPtr[2] = num; // track number
+                    trackPtr[3] = 0; // reserved
+                    if(msf)
+                    {
+                        uint32_t frames = lba + 150;
+                        trackPtr[4] = 0; // reserved
+                        trackPtr[5] = frames / (75 * 60); // M
+                        trackPtr[6] = (frames / 75) % 60; // S
+                        trackPtr[7] = frames % 75; // F 
+                    }
+                    else // LBA
+                    {
+                        trackPtr[4] = lba >> 24;
+                        trackPtr[5] = lba >> 16;
+                        trackPtr[6] = lba >> 8;
+                        trackPtr[7] = lba >> 0;
+                    }
+                };
+
+                if(trackSession <= 1)
+                {
+                    addTrack(trackPtr, 1, 0);
+                    trackPtr += 8;
+                }
+                // else if != 0xAA error
+
+                // lead out track
+                addTrack(trackPtr, 0xAA, io->getNumSectors(device));
             }
 
             status |= Status_DRQ;
