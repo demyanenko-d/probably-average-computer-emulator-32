@@ -723,12 +723,12 @@ void ATAController::doATAPICommand(int device)
             int format = sectorBuf[2] & 0xF;
             // uint8_t trackSession = sectorBuf[6];
 
-            pioReadLen = lbaMidCylinderLow | lbaHighCylinderHigh << 8; // requested len
+            // clamp to requested len
+            pioReadLen = std::min(lbaMidCylinderLow | lbaHighCylinderHigh << 8, 12);
             pioReadSectors = 0;
             bufOffset = 0;
 
             assert(format == 0);
-            assert(pioReadLen == 12);
 
             // data
             if(format == 0)
