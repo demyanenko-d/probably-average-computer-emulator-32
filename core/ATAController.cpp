@@ -40,6 +40,7 @@ enum class SCSICommand
     INQUIRY          = 0x12,
     READ_CAPACITY_10 = 0x25,
     READ_10          = 0x28,
+    SEEK_10          = 0x2B,
     READ_TOC         = 0x43,
 };
 
@@ -701,6 +702,18 @@ void ATAController::doATAPICommand(int device)
                             | (1 << 1); // to host
             }
 
+            break;
+        }
+
+        case SCSICommand::SEEK_10:
+        {
+            status |= Status_DSC;
+
+            // nothing else to do
+            sectorCount = 1 << 0  // command
+                        | 1 << 1; // to host
+            
+            flagIRQ();
             break;
         }
 
