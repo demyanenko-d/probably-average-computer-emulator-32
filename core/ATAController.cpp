@@ -34,11 +34,12 @@ enum class ATACommand
 
 enum class SCSICommand
 {
-    TEST_UNIT_READY = 0x00,
-    REQUEST_SENSE   = 0x03,
-    INQUIRY         = 0x12,
-    READ_10         = 0x28,
-    READ_TOC        = 0x43,
+    TEST_UNIT_READY  = 0x00,
+    REQUEST_SENSE    = 0x03,
+    INQUIRY          = 0x12,
+    READ_CAPACITY_10 = 0x25,
+    READ_10          = 0x28,
+    READ_TOC         = 0x43,
 };
 
 enum class SCSISenseKey
@@ -633,6 +634,35 @@ void ATAController::doATAPICommand(int device)
 
             status &= ~Status_DRDY;
             status |= Status_DRQ;
+
+            sectorCount = (0 << 0)  // data
+                        | (1 << 1); // to host
+
+            flagIRQ();
+            break;
+        }
+
+        case SCSICommand::READ_CAPACITY_10:
+        {
+            // clamp to requested len
+            pioReadLen = std::min(lbaMidCylinderLow | lbaHighCylinderHigh << 8, 8);
+            pioReadSectors = 0;
+            bufOffset = 0;
+
+            assert(pioReadLen == 8);
+
+            uint32_t numSectors = io->getNumSectors(device);
+            uint32_t sectorSize = 2048;
+
+            sectorBuf[0] = numSectors >> 24;
+            sectorBuf[1] = numSectors >> 16;
+            sectorBuf[2] = numSectors >> 8;
+            sectorBuf[3] = numSectors;
+
+            sectorBuf[4] = sectorSize >> 24;
+            sectorBuf[5] = sectorSize >> 16;
+            sectorBuf[6] = sectorSize >> 8;
+            sectorBuf[7] = sectorSize;
 
             sectorCount = (0 << 0)  // data
                         | (1 << 1); // to host
