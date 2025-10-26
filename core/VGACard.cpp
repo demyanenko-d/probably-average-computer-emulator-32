@@ -352,9 +352,6 @@ void VGACard::write(uint16_t addr, uint8_t data)
 
                     if(gfxMode & (1 << 3))
                         printf("VGA read mode 1\n");
-
-                    if((gfxMode & 3) == 3)
-                        printf("VGA write mode 3\n");
                     break;
                 }
                 case 6: // misc
@@ -524,7 +521,6 @@ void VGACard::writeMem(uint32_t addr, uint8_t data)
         else if(writeMode == 2)
             planeData = ((data >> i) & 1) * 0xFF;
 
-        // TODO: mode 3
         if(writeMode == 0 || writeMode == 2)
         {
             // apply logic op
@@ -539,5 +535,12 @@ void VGACard::writeMem(uint32_t addr, uint8_t data)
         }
         else if(writeMode == 1)
             ram[mappedAddr + i * 0x10000] = latch[i];
+        else // mode 3
+        {
+            auto mask = planeData & gfxBitMask;
+            auto setRes = (gfxSetReset & (1 << i)) ? 0xFF : 0;
+
+            ram[mappedAddr + i * 0x10000] = (setRes & mask) | (latch[i] & ~mask);
+        }
     }
 }
