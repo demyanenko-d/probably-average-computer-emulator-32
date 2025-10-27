@@ -163,7 +163,7 @@ private:
 
     bool setLDT(uint16_t selector);
 
-    std::tuple<uint32_t, uint16_t> getTSSStackPointer(int dpl);
+    bool getTSSStackPointer(int dpl, uint32_t &newSP, uint16_t &newSS);
 
     bool checkIOPermission(uint16_t addr);
     bool checkSegmentAccess(Reg16 segment, uint32_t offset, int width, bool write);

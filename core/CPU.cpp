@@ -6925,11 +6925,9 @@ bool CPU::setLDT(uint16_t selector)
     return true;
 }
 
-std::tuple<uint32_t, uint16_t> CPU::getTSSStackPointer(int dpl)
+bool CPU::getTSSStackPointer(int dpl, uint32_t &newSP, uint16_t &newSS)
 {
     auto &tsDesc = getCachedSegmentDescriptor(Reg16::TR);
-    uint32_t newSP;
-    uint16_t newSS;
 
     int descType = (tsDesc.flags & SD_SysType);
 
@@ -6937,17 +6935,35 @@ std::tuple<uint32_t, uint16_t> CPU::getTSSStackPointer(int dpl)
 
     if(descType == SD_SysTypeTSS32 || descType == SD_SysTypeBusyTSS32) // 32 bit
     {
-        readMem32(tsDesc.base + 4 + dpl * 8 + 0, newSP); // ESP[DPL]
-        readMem16(tsDesc.base + 4 + dpl * 8 + 4, newSS); // SS[DPL]
+        uint32_t tssAddr = 4 + dpl * 8;
+
+        // check limit
+        if(tssAddr + 5 > tsDesc.limit)
+        {
+            fault(Fault::TS, reg(Reg16::TR) & ~3);
+            return false;
+        }
+
+        return readMem32(tsDesc.base + tssAddr + 0, newSP)  // ESP[DPL]
+            && readMem16(tsDesc.base + tssAddr + 4, newSS); // SS[DPL]
     }
     else // 16 bit
     {
         assert(descType == SD_SysTypeTSS16 || descType == SD_SysTypeBusyTSS16);
-        readMem16(tsDesc.base + 2 + dpl * 4 + 0, newSP); // SP[DPL]
-        readMem16(tsDesc.base + 2 + dpl * 4 + 2, newSS); // SS[DPL]
+        uint32_t tssAddr = 2 + dpl * 4;
+
+        // check limit
+        if(tssAddr + 3 > tsDesc.limit)
+        {
+            fault(Fault::TS, reg(Reg16::TR) & ~3);
+            return false;
+        }
+
+        return readMem16(tsDesc.base + tssAddr + 0, newSP)  // SP[DPL]
+            && readMem16(tsDesc.base + tssAddr + 2, newSS); // SS[DPL]
     }
 
-    return {newSP, newSS};
+    return true;
 }
 
 bool CPU::checkIOPermission(uint16_t addr)
@@ -7435,7 +7451,10 @@ void CPU::farCall(uint32_t newCS, uint32_t newIP, uint32_t retAddr, bool operand
                     if(!(codeSegDesc.flags & SD_DirConform) && codeSegDPL < cpl) // more privilege
                     {
                         // get SP from TSS
-                        auto [newSP, newSS] = getTSSStackPointer(codeSegDPL);
+                        uint32_t newSP;
+                        uint16_t newSS;
+                        if(!getTSSStackPointer(codeSegDPL, newSP, newSS))
+                            return;
 
                         auto oldSP = reg(Reg32::ESP);
                         auto oldSS = reg(Reg16::SS);
@@ -7808,7 +7827,10 @@ void RAM_FUNC(CPU::serviceInterrupt)(uint8_t vector, bool isInt)
                 auto tmpSP = reg(Reg32::ESP);
 
                 // restore SS:ESP from TSS
-                auto [newSP, newSS] = getTSSStackPointer(newCSDPL);
+                uint32_t newSP;
+                uint16_t newSS;
+                if(!getTSSStackPointer(newCSDPL, newSP, newSS))
+                    return;
 
                 // avoid faults in setSegmentReg
                 // FIXME: faults here should be TS
@@ -7856,7 +7878,10 @@ void RAM_FUNC(CPU::serviceInterrupt)(uint8_t vector, bool isInt)
                 auto tmpSP = reg(Reg32::ESP);
 
                 // restore SS:ESP from TSS
-                auto [newSP, newSS] = getTSSStackPointer(newCSDPL);
+                uint32_t newSP;
+                uint16_t newSS;
+                if(!getTSSStackPointer(newCSDPL, newSP, newSS))
+                    return;
 
                 // same as above
                 cpl = newCSDPL;
