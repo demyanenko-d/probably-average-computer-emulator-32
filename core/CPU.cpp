@@ -753,6 +753,11 @@ void RAM_FUNC(CPU::executeInstruction)()
         return doPush(val, is32, stackAddrSize32);
     };
 
+    auto pushSeg = [this, stackAddrSize32](uint32_t val, bool is32)
+    {
+        return doPush(val, is32, stackAddrSize32, true);
+    };
+
     auto pop = [this, stackAddrSize32](bool is32, uint32_t &v)
     {
         uint32_t sp = stackAddrSize32 ? reg(Reg32::ESP) : reg(Reg16::SP);
@@ -892,19 +897,7 @@ void RAM_FUNC(CPU::executeInstruction)()
         case 0x1E:
         {
             auto r = static_cast<Reg16>(((opcode >> 3) & 7) + static_cast<int>(Reg16::ES));
-
-            // 32bit only writes two bytes...
-            if(operandSize32)
-            {
-                // ... but still adjust SP for 4
-                if(stackAddrSize32)
-                    reg(Reg32::ESP) -= 2;
-                else
-                    reg(Reg16::SP) -= 2;
-            }
-
-            push(reg(r), false);
-
+            pushSeg(reg(r), operandSize32);
             break;
         }
 
@@ -1445,7 +1438,7 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                 case 0xA0: // PUSH FS
                     reg(Reg32::EIP)++;
-                    push(reg(Reg16::FS), operandSize32);
+                    pushSeg(reg(Reg16::FS), operandSize32);
                     break;
                 case 0xA1: // POP FS
                 {
@@ -1570,7 +1563,7 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                 case 0xA8: // PUSH GS
                     reg(Reg32::EIP)++;
-                    push(reg(Reg16::GS), operandSize32);
+                    pushSeg(reg(Reg16::GS), operandSize32);
                     break;
                 case 0xA9: // POP GS
                 {
@@ -7269,7 +7262,7 @@ void CPU::doALU32AImm(uint32_t addr)
     reg(Reg32::EIP) += 4;
 }
 
-bool CPU::doPush(uint32_t val, bool op32, bool addr32)
+bool CPU::doPush(uint32_t val, bool op32, bool addr32, bool isSegmentReg)
 {
     uint32_t sp = addr32 ? reg(Reg32::ESP) : reg(Reg16::SP);
     if(sp == 0 && !addr32)
@@ -7277,7 +7270,8 @@ bool CPU::doPush(uint32_t val, bool op32, bool addr32)
     else
         sp -= op32 ? 4 : 2;
 
-    if(op32)
+    // pushing a segment register with a 32bit operand size only writes 16 bits
+    if(op32 && !isSegmentReg)
     {
         if(!writeMem32(sp, Reg16::SS, val))
             return false;
@@ -7325,7 +7319,7 @@ void CPU::farCall(uint32_t newCS, uint32_t newIP, uint32_t retAddr, bool operand
             }
 
             // push CS
-            doPush(reg(Reg16::CS), operandSize32, stackAddress32);
+            doPush(reg(Reg16::CS), operandSize32, stackAddress32, true);
 
             // push IP
             doPush(retAddr, operandSize32, stackAddress32);
@@ -7405,7 +7399,7 @@ void CPU::farCall(uint32_t newCS, uint32_t newIP, uint32_t retAddr, bool operand
                             reg(Reg16::SP) = newSP;
 
                         // push old stack
-                        doPush(oldSS, is32, stackAddress32);
+                        doPush(oldSS, is32, stackAddress32, true);
                         doPush(oldSP, is32, stackAddress32);
 
                         // push params
@@ -7424,7 +7418,7 @@ void CPU::farCall(uint32_t newCS, uint32_t newIP, uint32_t retAddr, bool operand
                         }
 
                         // push CS
-                        doPush(reg(Reg16::CS), is32, stackAddress32);
+                        doPush(reg(Reg16::CS), is32, stackAddress32, true);
 
                         // push IP
                         doPush(retAddr, is32, stackAddress32);
@@ -7438,7 +7432,7 @@ void CPU::farCall(uint32_t newCS, uint32_t newIP, uint32_t retAddr, bool operand
                     else
                     {
                         // push CS
-                        doPush(reg(Reg16::CS), is32, stackAddress32);
+                        doPush(reg(Reg16::CS), is32, stackAddress32, true);
 
                         // push IP
                         doPush(retAddr, is32, stackAddress32);
@@ -7486,7 +7480,7 @@ void CPU::farCall(uint32_t newCS, uint32_t newIP, uint32_t retAddr, bool operand
     {
         // real/virtual 8086 mode
         // push CS
-        doPush(reg(Reg16::CS), operandSize32, stackAddress32);
+        doPush(reg(Reg16::CS), operandSize32, stackAddress32, true);
 
         // push IP
         doPush(retAddr, operandSize32, stackAddress32);
@@ -7682,6 +7676,11 @@ void RAM_FUNC(CPU::serviceInterrupt)(uint8_t vector, bool isInt)
         doPush(val, is32, stackAddrSize32);
     };
 
+    auto pushSeg = [this, &stackAddrSize32](uint32_t val, bool is32)
+    {
+        doPush(val, is32, stackAddrSize32, true);
+    };
+
     auto tempFlags = flags;
 
     uint16_t newCS;
@@ -7760,10 +7759,10 @@ void RAM_FUNC(CPU::serviceInterrupt)(uint8_t vector, bool isInt)
                     reg(Reg16::SP) = newSP;
 
                 // big pile of extra pushes
-                push(reg(Reg16::GS), true);
-                push(reg(Reg16::FS), true);
-                push(reg(Reg16::DS), true);
-                push(reg(Reg16::ES), true);
+                pushSeg(reg(Reg16::GS), true);
+                pushSeg(reg(Reg16::FS), true);
+                pushSeg(reg(Reg16::DS), true);
+                pushSeg(reg(Reg16::ES), true);
 
                 // reset segments
                 setSegmentReg(Reg16::GS, 0);
@@ -7771,7 +7770,7 @@ void RAM_FUNC(CPU::serviceInterrupt)(uint8_t vector, bool isInt)
                 setSegmentReg(Reg16::DS, 0);
                 setSegmentReg(Reg16::ES, 0);
 
-                push(tmpSS, true);
+                pushSeg(tmpSS, true);
                 push(tmpSP, true);
 
                 // continue to the usual pushes
@@ -7857,7 +7856,7 @@ void RAM_FUNC(CPU::serviceInterrupt)(uint8_t vector, bool isInt)
     // inter-segment indirect call
 
     // push CS
-    push(reg(Reg16::CS), push32);
+    pushSeg(reg(Reg16::CS), push32);
 
     // push IP
     push(reg(Reg32::EIP), push32);
