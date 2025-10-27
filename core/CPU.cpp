@@ -4944,7 +4944,11 @@ void RAM_FUNC(CPU::executeInstruction)()
                     popPreChecked(operandSize32, newSS);
 
                     setSegmentReg(Reg16::SS, newSS, false);
-                    reg(Reg32::ESP) = newSP;
+
+                    if(isStackAddressSize32())
+                        reg(Reg32::ESP) = newSP + imm;
+                    else
+                        reg(Reg16::SP) = newSP + imm;
 
                     // check ES/DS/FS/GS descriptors against new CPL
                     auto checkSeg = [this](Reg16 r)
@@ -4960,15 +4964,6 @@ void RAM_FUNC(CPU::executeInstruction)()
                     checkSeg(Reg16::DS);
                     checkSeg(Reg16::FS);
                     checkSeg(Reg16::GS);
-
-                    if(opcode == 0xCA)
-                    {
-                        // add imm to the _other_ SP
-                        if(isStackAddressSize32())
-                            reg(Reg32::ESP) += imm;
-                        else
-                            reg(Reg16::SP) += imm;
-                    }
                 }
                 else // same privilege
                 {
@@ -5158,7 +5153,11 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                     // setup new stack
                     setSegmentReg(Reg16::SS, newSS);
-                    reg(Reg32::ESP) = newESP;
+
+                    if(isStackAddressSize32())
+                        reg(Reg32::ESP) = newESP;
+                    else
+                        reg(Reg16::SP) = newESP;
 
                     // check ES/DS/FS/GS descriptors against new CPL
                     auto checkSeg = [this](Reg16 r)
@@ -7400,7 +7399,10 @@ void CPU::farCall(uint32_t newCS, uint32_t newIP, uint32_t retAddr, bool operand
                         reg(Reg16::SS) = newSS;
                         stackAddress32 = newSSDesc.flags & SD_Size;
 
-                        reg(Reg32::ESP) = newSP;
+                        if(stackAddress32)
+                            reg(Reg32::ESP) = newSP;
+                        else
+                            reg(Reg16::SP) = newSP;
 
                         // push old stack
                         doPush(oldSS, is32, stackAddress32);
@@ -7746,12 +7748,16 @@ void RAM_FUNC(CPU::serviceInterrupt)(uint8_t vector, bool isInt)
                 cpl = selector & 3;
 
                 setSegmentReg(Reg16::SS, newSS);
-                reg(Reg32::ESP) = newSP;
 
                 assert(gate32);
 
                 // restore stack address size
                 stackAddrSize32 = isStackAddressSize32();
+
+                if(stackAddrSize32)
+                    reg(Reg32::ESP) = newSP;
+                else
+                    reg(Reg16::SP) = newSP;
 
                 // big pile of extra pushes
                 push(reg(Reg16::GS), true);
@@ -7788,10 +7794,14 @@ void RAM_FUNC(CPU::serviceInterrupt)(uint8_t vector, bool isInt)
                 cpl = newCSDPL;
 
                 setSegmentReg(Reg16::SS, newSS);
-                reg(Reg32::ESP) = newSP;
 
                 // update stack address size
                 stackAddrSize32 = isStackAddressSize32();
+
+                if(stackAddrSize32)
+                    reg(Reg32::ESP) = newSP;
+                else
+                    reg(Reg16::SP) = newSP;
 
                 push(tmpSS, gate32);
                 push(tmpSP, gate32);
