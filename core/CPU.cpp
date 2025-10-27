@@ -780,12 +780,20 @@ void RAM_FUNC(CPU::executeInstruction)()
         return true;
     };
 
+    // for use when we've already validated SP
+    // doesn't currently skip any validation
+    auto popPreChecked = [&pop](bool is32, uint32_t &v)
+    {
+        [[maybe_unused]] bool ok = pop(is32, v);
+        assert(ok);
+    };
+
     // sometimes we need to check values (segments) before affecting SP
-    auto peek = [this, stackAddrSize32](bool is32, int offset, uint32_t &v)
+    auto peek = [this, stackAddrSize32](bool is32, int offset, uint32_t &v, int byteOffset = 0)
     {
         uint32_t sp = stackAddrSize32 ? reg(Reg32::ESP) : reg(Reg16::SP);
 
-        sp += offset * (is32 ? 4 : 2);
+        sp += offset * (is32 ? 4 : 2) + byteOffset;
 
         if(!stackAddrSize32)
             sp &= 0xFFFF;
@@ -4881,20 +4889,34 @@ void RAM_FUNC(CPU::executeInstruction)()
             if(opcode == 0xCA && !readMem16(addr + 1, imm))
                 return;
 
-            // need to validate CS BEFORE popping anything...
+            uint32_t newIP, newCS;
+
+            // need to validate CS (and SS) BEFORE popping anything...
             if(isProtectedMode() && !(flags & Flag_VM))
             {
                 // peek might fault first
-                uint32_t newCS;
                 if(!peek(operandSize32, 1, newCS) || !checkSegmentSelector(Reg16::CS, newCS, (newCS & 3)))
                     break;
-            }
 
-            uint32_t newIP, newCS;
+                // validate new SS if return to outer
+                uint32_t newSS;
+                int rpl = (newCS & 3);
+                if(rpl > cpl && (!peek(operandSize32, 3, newSS, imm) || !checkSegmentSelector(Reg16::SS, newSS, rpl)))
+                    break;
+
+                // can't return to a higher privilege
+                if(rpl < cpl)
+                {
+                    fault(Fault::GP, 0);
+                    break;
+                }
+            }
+            else if(!peek(operandSize32, 1, newCS)) // get it anyway to force any faults to happen early
+                break;
 
             // pop IP/VS
-            if(!pop(operandSize32, newIP) || !pop(operandSize32, newCS))
-                break;
+            popPreChecked(operandSize32, newIP);
+            popPreChecked(operandSize32, newCS);
 
             if(opcode == 0xCA)
             {
@@ -4917,18 +4939,12 @@ void RAM_FUNC(CPU::executeInstruction)()
                     // additional stack restore
                     uint32_t newSP, newSS;
 
-                    // FIXME
-                    pop(operandSize32, newSP);
-                    pop(operandSize32, newSS);
+                    // can't fault, we pre-validated
+                    popPreChecked(operandSize32, newSP);
+                    popPreChecked(operandSize32, newSS);
 
-                    if(setSegmentReg(Reg16::SS, newSS))
-                        reg(Reg32::ESP) = newSP;
-                    else
-                    {
-                        // FIXME: pre-validate
-                        printf("RET SS failt!\n");
-                        exit(1);
-                    }
+                    setSegmentReg(Reg16::SS, newSS, false);
+                    reg(Reg32::ESP) = newSP;
 
                     // check ES/DS/FS/GS descriptors against new CPL
                     auto checkSeg = [this](Reg16 r)
