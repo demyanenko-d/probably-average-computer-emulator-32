@@ -1234,7 +1234,12 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                 case 0x02: // LAR
                 {
-                    assert(isProtectedMode() && !(flags & Flag_VM));
+                    // not recognised in real/virtual-8086 mode
+                    if(!isProtectedMode() || (flags & Flag_VM))
+                    {
+                        fault(Fault::UD);
+                        break;
+                    }
 
                     uint8_t modRM;
                     if(!readMem8(addr + 2, modRM))
@@ -1246,25 +1251,42 @@ void RAM_FUNC(CPU::executeInstruction)()
                     if(!readRM16(modRM, selector, addr + 1))
                         break;
 
-                    auto desc = loadSegmentDescriptor(selector);
+                    bool validDesc = false;
+                    SegmentDescriptor desc;
 
-                    // privileges
-                    int rpl = selector & 3;
-                    int dpl = (desc.flags & SD_PrivilegeLevel) >> 21;
-
-                    // no priv checks for conforming code segment
-                    bool isConformingCode = (desc.flags & (SD_Type | SD_DirConform | SD_Executable)) == (SD_Type | SD_DirConform | SD_Executable);
-
-                    bool validDesc = isConformingCode || (cpl <= dpl && rpl <= dpl);
-
-                    if(!(desc.flags & SD_Type))
+                    // check if null before reading
+                    if(selector >= 4)
                     {
-                        int sysType = (desc.flags & SD_SysType) >> 16;
-                        // LDT, TSS or call/task gate
-                        if(sysType != 0x1 && sysType != 0x2 && sysType != 0x3 && sysType != 0x4 &&
-                            sysType != 0x5 && sysType != 0x9 && sysType != 0xB && sysType != 0xC)
+                        desc = loadSegmentDescriptor(selector);
+                        // if the limit check fails, the descriptor flags will be zero
+                        // which is an invalid system descriptor type
+
+                        // privileges
+                        int rpl = selector & 3;
+                        int dpl = (desc.flags & SD_PrivilegeLevel) >> 21;
+
+                        // no priv checks for conforming code segment
+                        bool isConformingCode = (desc.flags & (SD_Type | SD_DirConform | SD_Executable)) == (SD_Type | SD_DirConform | SD_Executable);
+
+                        validDesc = isConformingCode || (cpl <= dpl && rpl <= dpl);
+
+                        if(!(desc.flags & SD_Type) && validDesc)
                         {
-                            validDesc = false;
+                            // everything valid except interrupt/trap gates
+                            switch(desc.flags & SD_SysType)
+                            {
+                                case SD_SysTypeTSS16:
+                                case SD_SysTypeLDT:
+                                case SD_SysTypeBusyTSS16:
+                                case SD_SysTypeCallGate16:
+                                case SD_SysTypeTaskGate:
+                                case SD_SysTypeTSS32:
+                                case SD_SysTypeBusyTSS32:
+                                case SD_SysTypeCallGate32:
+                                    break;
+                                default:
+                                    validDesc = false;
+                            }
                         }
                     }
 
@@ -1288,7 +1310,12 @@ void RAM_FUNC(CPU::executeInstruction)()
                 }
                 case 0x03: // LSL
                 {
-                    assert(isProtectedMode() && !(flags & Flag_VM));
+                    // not recognised in real/virtual-8086 mode
+                    if(!isProtectedMode() || (flags & Flag_VM))
+                    {
+                        fault(Fault::UD);
+                        break;
+                    }
 
                     uint8_t modRM;
                     if(!readMem8(addr + 2, modRM))
@@ -1300,22 +1327,40 @@ void RAM_FUNC(CPU::executeInstruction)()
                     if(!readRM16(modRM, selector, addr + 1))
                         break;
 
-                    auto desc = loadSegmentDescriptor(selector);
+                    bool validDesc = false;
+                    SegmentDescriptor desc;
 
-                    // privileges
-                    int rpl = selector & 3;
-                    int dpl = (desc.flags & SD_PrivilegeLevel) >> 21;
-
-                    // no priv checks for conforming code segment
-                    bool isConformingCode = (desc.flags & (SD_Type | SD_DirConform | SD_Executable)) == (SD_Type | SD_DirConform | SD_Executable);
-
-                    bool validDesc = isConformingCode || (cpl <= dpl && rpl <= dpl);
-
-                    if(!(desc.flags & SD_Type))
+                    // check if null before reading
+                    if(selector >= 4)
                     {
-                        int sysType = (desc.flags & SD_SysType) >> 16;
-                        if(sysType != 0x1 && sysType != 0x2 && sysType != 0x3 && sysType != 0x9 && sysType != 0xB) // LDT or TSS
-                            validDesc = false;
+                        desc = loadSegmentDescriptor(selector);
+                        // if the limit check fails, the descriptor flags will be zero
+                        // which is an invalid system descriptor type
+
+                        // privileges
+                        int rpl = selector & 3;
+                        int dpl = (desc.flags & SD_PrivilegeLevel) >> 21;
+
+                        // no priv checks for conforming code segment
+                        bool isConformingCode = (desc.flags & (SD_Type | SD_DirConform | SD_Executable)) == (SD_Type | SD_DirConform | SD_Executable);
+
+                        validDesc = isConformingCode || (cpl <= dpl && rpl <= dpl);
+
+                        if(!(desc.flags & SD_Type))
+                        {
+                            // more limited set than LAR (because gates don't have limits)
+                            switch(desc.flags & SD_SysType)
+                            {
+                                case SD_SysTypeTSS16:
+                                case SD_SysTypeLDT:
+                                case SD_SysTypeBusyTSS16:
+                                case SD_SysTypeTSS32:
+                                case SD_SysTypeBusyTSS32:
+                                    break;
+                                default:
+                                    validDesc = false;
+                            }
+                        }
                     }
 
                     if(validDesc)
