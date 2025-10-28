@@ -340,7 +340,6 @@ void ATAController::write(uint16_t addr, uint8_t data)
 
                         pioReadLen = 512;
                         bufOffset = 0;
-                        status &= ~Status_DRDY;
                         status |= Status_DRQ;
                     }
                     else
