@@ -526,10 +526,12 @@ void ATAController::fillIdentity(int device)
     }
     else
     {
+        wordBuf[0] = 1 << 6; // non-removable
         calculateCHS(device);
 
         wordBuf[1] = numCylinders[device];
         wordBuf[3] = numHeads[device];
+        wordBuf[5] = 512; // bytes per sector
         wordBuf[6] = sectorsPerTrack[device];
     }
 
