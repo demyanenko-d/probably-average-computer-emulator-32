@@ -509,7 +509,10 @@ int main(int argc, char *argv[])
     for(int i = 0; i < FileATAIO::maxDrives; i++)
     {
         if(!ataPaths[i].empty())
+        {
             ataPrimaryIO.openDisk(i, basePath + ataPaths[i]);
+            sys.getChipset().setFixedDiskPresent(i, ataPrimaryIO.getNumSectors(i) && !ataPrimaryIO.isATAPI(i));
+        }
     }
     
     fdc.setIOInterface(&floppyIO);
