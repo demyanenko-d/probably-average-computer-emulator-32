@@ -13,8 +13,8 @@ enum ATAStatus
 {
     Status_ERR  = 1 << 0, // error
     Status_DRQ  = 1 << 3, // data request
-    Status_DF   = 1 << 5, // device fault
     Status_DSC  = 1 << 4, // seek complete
+    Status_DF   = 1 << 5, // device fault
     Status_DRDY = 1 << 6, // device ready
     Status_BSY  = 1 << 7, // busy
 };
