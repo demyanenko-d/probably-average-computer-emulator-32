@@ -236,7 +236,6 @@ void ATAController::write(uint16_t addr, uint8_t data)
                     if(isLBA)
                     {
                         lba = lbaLowSector | lbaMidCylinderLow << 8 | lbaHighCylinderHigh << 16 | (deviceHead & 0xF) << 24;
-                        printf("ATA dev %i read %i sectors LBA %u\n", dev, sectorCount, lba);
                     }
                     else
                     {
@@ -270,7 +269,6 @@ void ATAController::write(uint16_t addr, uint8_t data)
                     if(isLBA)
                     {
                         lba = lbaLowSector | lbaMidCylinderLow << 8 | lbaHighCylinderHigh << 16 | (deviceHead & 0xF) << 24;
-                        printf("ATA dev %i write %i sectors LBA %u\n", dev, sectorCount, lba);
                     }
                     else
                     {
