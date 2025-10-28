@@ -4969,7 +4969,7 @@ void RAM_FUNC(CPU::executeInstruction)()
                 // can't return to a higher privilege
                 if(rpl < cpl)
                 {
-                    fault(Fault::GP, 0);
+                    fault(Fault::GP, newCS & ~3);
                     break;
                 }
             }
