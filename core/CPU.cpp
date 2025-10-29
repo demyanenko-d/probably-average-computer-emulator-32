@@ -7181,8 +7181,14 @@ bool CPU::checkSegmentAccess(Reg16 segment, uint32_t offset, int width, bool wri
 // checks if we can push a number of words
 bool CPU::checkStackSpace(int words, bool op32, bool addr32)
 {
-    int wordSize = op32 ? 4 : 2;
     auto sp = addr32 ? reg(Reg32::ESP) : reg(Reg16::SP);
+
+    return checkStackSpace(sp, getCachedSegmentDescriptor(Reg16::SS), words, op32, addr32);
+}
+
+bool CPU::checkStackSpace(uint32_t sp, const SegmentDescriptor &ssDesc, int words, bool op32, bool addr32)
+{
+    int wordSize = op32 ? 4 : 2;
 
     uint32_t stackLimit;
     bool expandDown;
@@ -7194,7 +7200,6 @@ bool CPU::checkStackSpace(int words, bool op32, bool addr32)
         endSP &= 0xFFFF;
 
     // get limit
-    auto &desc = getCachedSegmentDescriptor(Reg16::SS);
     if(flags & Flag_VM)
     {
         // fixed
@@ -7203,8 +7208,8 @@ bool CPU::checkStackSpace(int words, bool op32, bool addr32)
     }
     else
     {
-        stackLimit = desc.limit;
-        expandDown = desc.flags & SD_DirConform;
+        stackLimit = ssDesc.limit;
+        expandDown = ssDesc.flags & SD_DirConform;
     }
 
     if(expandDown)
@@ -7226,14 +7231,14 @@ bool CPU::checkStackSpace(int words, bool op32, bool addr32)
         return true;
 
     // now check for page fault
-    sp += desc.base;
+    sp += ssDesc.base;
 
     uint32_t temp;
     if(!getPhysicalAddress(sp, temp, true))
         return false;
 
     // check again if we crossed a page boundary
-    endSP += desc.base;
+    endSP += ssDesc.base;
     return (endSP >> 12 == sp >> 12) || getPhysicalAddress(endSP, temp, true);
 }
 
