@@ -6325,8 +6325,7 @@ void RAM_FUNC(CPU::executeInstruction)()
                     uint16_t newCS;
                     readMem16(offset + (operandSize32 ? 4 : 2), segment, newCS);
 
-                    setSegmentReg(Reg16::CS, newCS);
-                    setIP(v);
+                    farJump(newCS, v, reg(Reg32::EIP) + 1);
                     break;
                 }
                 case 6: // PUSH
