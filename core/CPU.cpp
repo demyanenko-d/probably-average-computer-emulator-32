@@ -8038,10 +8038,10 @@ void RAM_FUNC(CPU::serviceInterrupt)(uint8_t vector, bool isInt)
         uint16_t selector;
         uint8_t access;
 
-        readMem16(addr, offset);
-        readMem16(addr + 6, tmp);
-        readMem16(addr + 2, selector);
-        readMem8(addr + 5, access);
+        readMem16(addr, offset, true);
+        readMem16(addr + 6, tmp, true);
+        readMem16(addr + 2, selector, true);
+        readMem8(addr + 5, access, true);
 
         offset |= tmp << 16;
 
