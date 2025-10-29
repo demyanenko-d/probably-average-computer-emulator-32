@@ -5008,21 +5008,28 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
         case 0xC9: // LEAVE
         {
-            // restore SP
-            if(stackAddrSize32)
-                reg(Reg32::ESP) = reg(Reg32::EBP);
-            else
-                reg(Reg16::SP) = reg(Reg16::BP);
-            
-            // restore BP
-            uint32_t val;
-            if(!pop(operandSize32, val))
-                break;
+            // pop helper inlined to use BP instead of SP
+            // restore BP... using BP
+            uint32_t newSP = stackAddrSize32 ? reg(Reg32::EBP) : reg(Reg16::BP);
 
             if(operandSize32)
-                reg(Reg32::EBP) = val;
+            {
+                if(!readMem32(newSP, Reg16::SS, reg(Reg32::EBP)))
+                    break;
+                newSP += 4;
+            }
             else
-                reg(Reg16::BP) = val;
+            {
+                if(!readMem16(newSP, Reg16::SS, reg(Reg16::BP)))
+                    break;
+                newSP += 2;
+            }
+
+            // set new SP
+            if(stackAddrSize32)
+                reg(Reg32::ESP) = newSP;
+            else
+                reg(Reg16::SP) = newSP;
 
             break;
         }
