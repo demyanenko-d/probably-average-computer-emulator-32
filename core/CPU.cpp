@@ -758,6 +758,14 @@ void RAM_FUNC(CPU::executeInstruction)()
         return doPush(val, is32, stackAddrSize32, true);
     };
 
+    // for use when we've already validated SP
+    // doesn't currently skip any validation
+    auto pushPreChecked = [&push](uint32_t val, bool is32)
+    {
+        [[maybe_unused]] bool ok = push(val, is32);
+        assert(ok);
+    };
+
     auto pop = [this, stackAddrSize32](bool is32, uint32_t &v)
     {
         uint32_t sp = stackAddrSize32 ? reg(Reg32::ESP) : reg(Reg16::SP);
@@ -2733,43 +2741,50 @@ void RAM_FUNC(CPU::executeInstruction)()
 
         case 0x60: // PUSHA
         {
+            if(!checkStackSpace(8, operandSize32, stackAddrSize32))
+                break;
+
             auto sp = reg(Reg32::ESP);
-            push(reg(Reg32::EAX), operandSize32);
-            push(reg(Reg32::ECX), operandSize32);
-            push(reg(Reg32::EDX), operandSize32);
-            push(reg(Reg32::EBX), operandSize32);
-            push(sp, operandSize32);
-            push(reg(Reg32::EBP), operandSize32);
-            push(reg(Reg32::ESI), operandSize32);
-            push(reg(Reg32::EDI), operandSize32);
+
+            pushPreChecked(reg(Reg32::EAX), operandSize32);
+            pushPreChecked(reg(Reg32::ECX), operandSize32);
+            pushPreChecked(reg(Reg32::EDX), operandSize32);
+            pushPreChecked(reg(Reg32::EBX), operandSize32);
+            pushPreChecked(sp, operandSize32);
+            pushPreChecked(reg(Reg32::EBP), operandSize32);
+            pushPreChecked(reg(Reg32::ESI), operandSize32);
+            pushPreChecked(reg(Reg32::EDI), operandSize32);
 
             break;
         }
         case 0x61: // POPA
         {
-            // FIXME: faults
             uint32_t v;
+
+            if(!peek(operandSize32, 7, v))
+                break;
+
             if(operandSize32)
             {
-                pop(true, reg(Reg32::EDI));
-                pop(true, reg(Reg32::ESI));
-                pop(true, reg(Reg32::EBP));
-                pop(true, v); // skip sp
-                pop(true, reg(Reg32::EBX));
-                pop(true, reg(Reg32::EDX));
-                pop(true, reg(Reg32::ECX));
-                pop(true, reg(Reg32::EAX));
+                popPreChecked(true, reg(Reg32::EDI));
+                popPreChecked(true, reg(Reg32::ESI));
+                popPreChecked(true, reg(Reg32::EBP));
+                popPreChecked(true, v); // skip sp
+                popPreChecked(true, reg(Reg32::EBX));
+                popPreChecked(true, reg(Reg32::EDX));
+                popPreChecked(true, reg(Reg32::ECX));
+                popPreChecked(true, reg(Reg32::EAX));
             }
             else
             {
-                pop(false, v); reg(Reg16::DI) = v;
-                pop(false, v); reg(Reg16::SI) = v;
-                pop(false, v); reg(Reg16::BP) = v;
-                pop(false, v); // skip sp
-                pop(false, v); reg(Reg16::BX) = v;
-                pop(false, v); reg(Reg16::DX) = v;
-                pop(false, v); reg(Reg16::CX) = v;
-                pop(false, v); reg(Reg16::AX) = v;
+                popPreChecked(false, v); reg(Reg16::DI) = v;
+                popPreChecked(false, v); reg(Reg16::SI) = v;
+                popPreChecked(false, v); reg(Reg16::BP) = v;
+                popPreChecked(false, v); // skip sp
+                popPreChecked(false, v); reg(Reg16::BX) = v;
+                popPreChecked(false, v); reg(Reg16::DX) = v;
+                popPreChecked(false, v); reg(Reg16::CX) = v;
+                popPreChecked(false, v); reg(Reg16::AX) = v;
             }
 
             break;
