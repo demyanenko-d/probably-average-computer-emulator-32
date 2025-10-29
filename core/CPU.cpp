@@ -7574,6 +7574,10 @@ void CPU::farCall(uint32_t newCS, uint32_t newIP, uint32_t retAddr, bool operand
                 assert(dpl == cpl); // GP
             }
 
+            // check space
+            if(!checkStackSpace(2, operandSize32, stackAddress32))
+                return;
+
             // push CS
             doPush(reg(Reg16::CS), operandSize32, stackAddress32, true);
 
@@ -7582,11 +7586,7 @@ void CPU::farCall(uint32_t newCS, uint32_t newIP, uint32_t retAddr, bool operand
 
             newCS = (newCS & ~3) | cpl; // RPL = CPL
 
-            if(!setSegmentReg(Reg16::CS, newCS))
-            {
-                printf("call cs fault!\n");
-                exit(1);
-            }
+            setSegmentReg(Reg16::CS, newCS, false);
             reg(Reg32::EIP) = newIP;
         }
         else 
@@ -7638,8 +7638,12 @@ void CPU::farCall(uint32_t newCS, uint32_t newIP, uint32_t retAddr, bool operand
                         if(!checkSegmentSelector(Reg16::SS, newSS, newCPL, 0, Fault::TS))
                             return;
 
-                        // FIXME: check limit for space for params + SS:SP + CS:IP
                         auto newSSDesc = loadSegmentDescriptor(newSS);
+
+                        // check for space for params + SS:SP + CS:IP
+                        int numParams = (newDesc.base >> 16) & 0x1F;
+                        if(!checkStackSpace(newSP, newSSDesc, numParams + 4, operandSize32, newSSDesc.flags & SD_Size))
+                            break;
 
                         // check new IP
                         if(codeSegOffset > codeSegDesc.limit)
@@ -7663,13 +7667,12 @@ void CPU::farCall(uint32_t newCS, uint32_t newIP, uint32_t retAddr, bool operand
                         doPush(oldSP, is32, stackAddress32);
 
                         // push params
-                        int temp = (newDesc.base >> 16) & 0x1F;
-                        auto copySP = oldSP + (temp - 1) * (is32 ? 4 : 2);
+                        auto copySP = oldSP + (numParams - 1) * (is32 ? 4 : 2);
 
                         if(!oldStackAddress32)
                             copySP &= 0xFFFF;
 
-                        for(int i = 0; i < temp; i++)
+                        for(int i = 0; i < numParams; i++)
                         {
                             // this read really shouldn't fault as we should be reading values that were just written before the call...
                             // TODO?: if 16bit SP wraps we have a problem
@@ -7702,6 +7705,10 @@ void CPU::farCall(uint32_t newCS, uint32_t newIP, uint32_t retAddr, bool operand
                     }
                     else
                     {
+                        // check space
+                        if(!checkStackSpace(2, operandSize32, stackAddress32))
+                            return;
+                            
                         // push CS
                         doPush(reg(Reg16::CS), is32, stackAddress32, true);
 
