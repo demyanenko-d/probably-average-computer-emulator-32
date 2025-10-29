@@ -5173,31 +5173,48 @@ void RAM_FUNC(CPU::executeInstruction)()
         {
             delayInterrupt = true;
 
+            uint32_t newIP, newCS, newFlags;
+
             // need to validate CS BEFORE popping anything...
             if(isProtectedMode() && !(flags & Flag_VM) && !(flags & Flag_NT))
             {
-                uint32_t newCS, newFlags;
                 if(!peek(operandSize32, 1, newCS) || !peek(operandSize32, 2, newFlags))
                     break; // whoops stack fault
+
+                uint32_t tmp;
 
                 // not a segment selector if we're switching to virtual-8086 mode
                 if(!(newFlags & Flag_VM) && !checkSegmentSelector(Reg16::CS, newCS, newCS & 3))
                     break;
+                else if(newFlags & Flag_VM)
+                {
+                    // check extra pops
+                    // IP, CS, FLAGS, SP, SS, ES, DS, FS, GS
+                    if(!peek(operandSize32, 8, tmp))
+                        break;
+                }
+                else if((newCS & 3) > cpl)
+                {
+                    // check extra pops
+                    // IP, CS, FLAGS, SP, SS
+                    if(!peek(operandSize32, 4, tmp))
+                        break;
+                }
             }
-
-            uint32_t newIP, newCS, newFlags;
+            // check we can pop the first three anyway, except for task returns, which don't do any
+            else if(!(flags & Flag_NT) && !peek(operandSize32, 2, newFlags))
+                break;
 
             if(!isProtectedMode()) // real mode
             {
-                // FIXME: faults
                 // pop IP
-                pop(operandSize32, newIP);
+                popPreChecked(operandSize32, newIP);
 
                 // pop CS
-                pop(operandSize32, newCS);
+                popPreChecked(operandSize32, newCS);
 
                 // pop flags
-                pop(operandSize32, newFlags);
+                popPreChecked(operandSize32, newFlags);
 
                 // real mode
                 uint32_t flagMask = Flag_C | Flag_P | Flag_A | Flag_Z | Flag_S | Flag_T | Flag_I | Flag_D | Flag_O | Flag_IOPL | Flag_NT | Flag_R;
@@ -5213,13 +5230,13 @@ void RAM_FUNC(CPU::executeInstruction)()
                 if(iopl == 3)
                 {
                     // pop IP
-                    pop(operandSize32, newIP);
+                    popPreChecked(operandSize32, newIP);
 
                     // pop CS
-                    pop(operandSize32, newCS);
+                    popPreChecked(operandSize32, newCS);
 
                     // pop flags
-                    pop(operandSize32, newFlags);
+                    popPreChecked(operandSize32, newFlags);
 
                     setSegmentReg(Reg16::CS, newCS);
                     setIP(newIP);
@@ -5229,7 +5246,6 @@ void RAM_FUNC(CPU::executeInstruction)()
                 }
                 else
                 {
-                    printf("V86 IRET IOPL %i\n", iopl);
                     fault(Fault::GP, 0);
                 }
             }
@@ -5253,13 +5269,13 @@ void RAM_FUNC(CPU::executeInstruction)()
             {
                 // we know that these aren't going to fault as we've already read them
                 // pop IP
-                pop(operandSize32, newIP);
+                popPreChecked(operandSize32, newIP);
 
                 // pop CS
-                pop(operandSize32, newCS);
+                popPreChecked(operandSize32, newCS);
 
                 // pop flags
-                pop(operandSize32, newFlags);
+                popPreChecked(operandSize32, newFlags);
 
                 unsigned newCSRPL = newCS & 3;
 
@@ -5272,15 +5288,15 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                     // prepare new stack
                     uint32_t newESP, newSS;
-                    pop(operandSize32, newESP);
-                    pop(operandSize32, newSS);
+                    popPreChecked(operandSize32, newESP);
+                    popPreChecked(operandSize32, newSS);
 
                     // pop segments
                     uint32_t newES, newDS, newFS, newGS;
-                    pop(operandSize32, newES);
-                    pop(operandSize32, newDS);
-                    pop(operandSize32, newFS);
-                    pop(operandSize32, newGS);
+                    popPreChecked(operandSize32, newES);
+                    popPreChecked(operandSize32, newDS);
+                    popPreChecked(operandSize32, newFS);
+                    popPreChecked(operandSize32, newGS);
 
                     // set new flags and CS (we're now in v86 mode at the new privilege level)
                     // I/IOPL are always allowed here as CPL must be 0
@@ -5302,8 +5318,8 @@ void RAM_FUNC(CPU::executeInstruction)()
                 else if(newCSRPL > cpl) // return to outer privilege
                 {
                     uint32_t newESP, newSS;
-                    pop(operandSize32, newESP);
-                    pop(operandSize32, newSS);
+                    popPreChecked(operandSize32, newESP);
+                    popPreChecked(operandSize32, newSS);
 
                     // flags
                     unsigned iopl = (flags & Flag_IOPL) >> 12;
