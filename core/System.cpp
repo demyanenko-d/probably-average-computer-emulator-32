@@ -1383,6 +1383,9 @@ uint8_t RAM_FUNC(System::readIOPort)(uint16_t addr)
     }
 
 #ifndef NDEBUG
+    if(addr >= 0xCF8 && addr < 0xD00) // PCI
+        return 0xFF;
+
     auto [cs, ip, opAddr] = cpu.getOpStartAddr();
     printf("IO R %04X @%08X\n", addr, opAddr);
 #endif
@@ -1399,6 +1402,9 @@ uint16_t RAM_FUNC(System::readIOPort16)(uint16_t addr)
     }
 
 #ifndef NDEBUG
+    if(addr >= 0xCF8 && addr < 0xD00) // PCI
+        return 0xFFFF;
+
     auto [cs, ip, opAddr] = cpu.getOpStartAddr();
     printf("IO R16 %04X @%08X\n", addr, opAddr);
 #endif
@@ -1415,6 +1421,9 @@ void RAM_FUNC(System::writeIOPort)(uint16_t addr, uint8_t data)
     }
 
 #ifndef NDEBUG
+    if(addr >= 0xCF8 && addr < 0xD00) // PCI
+        return;
+
     auto [cs, ip, opAddr] = cpu.getOpStartAddr();
     printf("IO W %04X = %02X @%08X\n", addr, data, opAddr);
 #endif
@@ -1429,6 +1438,9 @@ void RAM_FUNC(System::writeIOPort16)(uint16_t addr, uint16_t data)
     }
 
 #ifndef NDEBUG
+    if(addr >= 0xCF8 && addr < 0xD00) // PCI
+        return;
+
     auto [cs, ip, opAddr] = cpu.getOpStartAddr();
     printf("IO W16 %04X = %02X @%08X\n", addr, data, opAddr);
 #endif
