@@ -27,6 +27,12 @@ void VGACard::drawScanline(int line, uint8_t *output)
     };
 #endif
 
+    auto paletteLookup16 = [this] (int index)
+    {
+        uint8_t pal64 = attribPalette[index];
+        return dacPalette + pal64 * 3;
+    };
+
     lastOutputLine = line;
 
     // check for scan double
@@ -60,6 +66,9 @@ void VGACard::drawScanline(int line, uint8_t *output)
             int bg = attr >> 4;
             int fg = attr & 0xF;
 
+            auto bgCol = paletteLookup16(bg);
+            auto fgCol = paletteLookup16(fg);
+
             // TODO: char sets
             uint16_t fontLine = plane2[ch * 32 + line % charHeight] << 8;
 
@@ -73,9 +82,7 @@ void VGACard::drawScanline(int line, uint8_t *output)
             {
                 bool fontVal = ((fontLine << x) & 0x8000);
 
-                // double palette lookup
-                uint8_t pal64 = attribPalette[(fontVal ? fg : bg)];
-                auto pal256 = dacPalette + pal64 * 3;
+                auto pal256 = fontVal ? fgCol : bgCol;
 
                 outputPixel(pal256[0], pal256[1], pal256[2]);
             }
@@ -145,8 +152,7 @@ void VGACard::drawScanline(int line, uint8_t *output)
                 byte2 <<= 1;
                 byte3 <<= 1;
 
-                uint8_t pal64 = attribPalette[col];
-                auto pal256 = dacPalette + pal64 * 3;
+                auto pal256 = paletteLookup16(col);
 
                 outputPixel(pal256[0], pal256[1], pal256[2]);
             }
