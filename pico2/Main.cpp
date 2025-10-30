@@ -1,4 +1,5 @@
 #include <forward_list>
+#include <string_view>
 
 #include "hardware/clocks.h"
 #include "hardware/irq.h"
@@ -113,6 +114,62 @@ static void core1Main()
         runEmulator(time);
 }
 
+static bool readConfigFile()
+{
+    char buf[100];
+
+    FIL configFile;
+
+    if(f_open(&configFile, "config.txt", FA_READ | FA_OPEN_EXISTING) != FR_OK)
+        return false;
+
+    size_t off = 0;
+    UINT read;
+
+    while(!f_eof(&configFile))
+    {
+        // get line
+        for(off = 0; off < sizeof(buf) - 1; off++)
+        {
+            if(f_read(&configFile, buf + off, 1, &read) != FR_OK || !read)
+                break;
+
+            if(buf[off] == '\n')
+                break;
+        }
+        buf[off] = 0;
+
+        // parse key=value
+        std::string_view line(buf);
+
+        auto equalsPos = line.find_first_of('=');
+
+        if(equalsPos == std::string_view::npos)
+        {
+            printf("invalid config line %s\n", buf);
+            continue;
+        }
+
+        auto key = line.substr(0, equalsPos);
+        auto value = line.substr(equalsPos + 1);
+
+        // ata drive (yes, 0-9 is a little optimistic)
+        if(key.compare(0, 3, "ata") == 0 && key.length() == 4 && key[3] >= '0' && key[3] <= '9')
+        {
+            int index = key[3] - '0';
+            // TODO: secondary controller?
+            // using value as a c string is fine as it's the end of the original string
+            ataPrimaryIO.openDisk(index, value.data());
+        }
+        else
+            printf("unhandled config line %s\n", buf);
+    }
+
+    f_close(&configFile);
+
+    return true;
+}
+
 int main()
 {
     set_sys_clock_khz(250000, false);
@@ -155,7 +212,11 @@ int main()
 
     // disk setup
     ataPrimary.setIOInterface(&ataPrimaryIO);
-    ataPrimaryIO.openDisk(0, "hd0.img");
+    if(!readConfigFile())
+    {
+        // load a default image
+        ataPrimaryIO.openDisk(0, "hd0.img");
+    }
 
     sys.reset();
 
