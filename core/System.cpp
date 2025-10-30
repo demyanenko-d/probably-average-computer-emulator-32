@@ -168,8 +168,8 @@ uint8_t Chipset::read(uint16_t addr)
         case 0xA1: // second PIC mask (OCW1)
             return pic[1].read(1);
 
-        default:
 #ifndef NDEBUG
+        default:
             auto [cs, ip, opAddr] = sys.getCPU().getOpStartAddr();
             printf("IO R %04X @%08X\n", addr, opAddr);
 #endif
@@ -487,8 +487,8 @@ void Chipset::write(uint16_t addr, uint8_t data)
             break;
         }
 
-        default:
 #ifndef NDEBUG
+        default:
             auto [cs, ip, opAddr] = sys.getCPU().getOpStartAddr();
             printf("IO W %04X = %02X @%08X\n", addr, data, opAddr);
 #endif
