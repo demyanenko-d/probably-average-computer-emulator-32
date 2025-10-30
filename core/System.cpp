@@ -618,9 +618,6 @@ void Chipset::updateDMA()
                 dma.mask |= (1 << i);
         }
 
-        // some time passed
-        // FIXME: definitely not accurate
-        sys.addCPUCycles(2);
         return;
     }
 }
