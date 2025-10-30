@@ -11,14 +11,23 @@ VGACard::VGACard(System &sys) : sys(sys)
 void VGACard::drawScanline(int line, uint8_t *output)
 {
 #ifdef VGA_RGB565
-    auto outputPixel = [&output](uint8_t *col)
+    auto outputPixel = [&output](uint16_t col)
     {
-        uint8_t r = col[0];
-        uint8_t g = col[1];
-        uint8_t b = col[2];
-
-        *reinterpret_cast<uint16_t *>(output) = r >> 1 | g << 5 | (b >> 1) << 11;
+        *reinterpret_cast<uint16_t *>(output) = col;
         output += 2;
+    };
+
+    auto paletteLookup16 = [this](int index)
+    {
+        uint8_t pal64 = attribPalette[index];
+        auto pal256 = dacPalette + pal64 * 3;
+        return pal256[0] >> 1 | pal256[1] << 5 | (pal256[2] >> 1) << 11;
+    };
+
+    auto paletteLookup256 = [this](int index)
+    {
+        auto pal256 = dacPalette + index * 3;
+        return pal256[0] >> 1 | pal256[1] << 5 | (pal256[2] >> 1) << 11;
     };
 #else
     // RGB888
@@ -32,7 +41,6 @@ void VGACard::drawScanline(int line, uint8_t *output)
         *output++ = b << 2 | b >> 4;
         output++;
     };
-#endif
 
     auto paletteLookup16 = [this](int index)
     {
@@ -44,6 +52,7 @@ void VGACard::drawScanline(int line, uint8_t *output)
     {
         return dacPalette + index * 3;
     };
+#endif
 
     lastOutputLine = line;
 
