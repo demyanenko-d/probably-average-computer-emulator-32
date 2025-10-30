@@ -39,59 +39,6 @@ static VGACard vga(sys);
 
 static uint32_t emu_time = 0, real_time = 0, sync_time = 0;
 
-static void scanlineCallback(const uint8_t *data, int line, int w)
-{
-    // seems to be a bug sometimes when switching mode
-    if(w > 640)
-        w = 640;
-
-    auto fb = display_get_framebuffer();
-    auto ptr = fb + line * w;
-
-    if(line == 0)
-    {
-        // sync first half
-        auto start = get_absolute_time();
-        while(display_in_first_half()) {};
-        sync_time += absolute_time_diff_us(start, get_absolute_time());
-        set_display_size(w, 200);
-    }
-    else if(line == 100)
-    {
-        // sync second half
-        auto start = get_absolute_time();
-        while(display_in_second_half()) {};
-        sync_time += absolute_time_diff_us(start, get_absolute_time());
-    }
-
-    // copy
-    memcpy(ptr, data, w / 2);
-
-    if(line == 199)
-    {
-        // end
-        update_display();
-    }
-}
-
-static uint8_t *requestMem(unsigned int block)
-{
-    auto addr = block * System::getMemoryBlockSize();
-
-    // this is only for mapping above board memory
-    if(addr < 0x100000)
-        return nullptr;
-
-    addr -= 0x100000;
-
-    // needs to be a multiple of 2MB and we're already using some
-    if(addr >= 6 * 1024 * 1024)
-        return nullptr;
-    
-    auto psram = reinterpret_cast<uint8_t *>(PSRAM_LOCATION);
-    return psram + 640 * 1024 + addr;
-}
-
 static void speakerCallback(int8_t sample)
 {
     int16_t sample16 = sample << 4;
