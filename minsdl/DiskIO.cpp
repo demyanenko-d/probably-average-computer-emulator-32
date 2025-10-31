@@ -1,6 +1,8 @@
 #include <filesystem>
 #include <iostream>
 
+#include "Floppy.h"
+
 #include "DiskIO.h"
 
 bool FileFloppyIO::isPresent(int unit)
@@ -48,39 +50,14 @@ void FileFloppyIO::openDisk(int unit, std::string path)
         auto fdSize = file[unit].tellg();
 
         // try to work out geometry
-        switch(fdSize / 1024)
+        guessFloppyImageGeometry(fdSize, doubleSided[unit], sectorsPerTrack[unit]);
+
+        if(!sectorsPerTrack[unit])
         {
-            case 160:
-                doubleSided[unit] = false;
-                sectorsPerTrack[unit] = 8;
-                break;
-            case 180:
-                doubleSided[unit] = false;
-                sectorsPerTrack[unit] = 9;
-                break;
-            case 360:
-                doubleSided[unit] = true;
-                sectorsPerTrack[unit] = 9;
-                // could also be a single-sided 3.5-inch disk
-                break;
-            case 720: // 3.5 inch
-                doubleSided[unit] = true;
-                sectorsPerTrack[unit] = 9;
-                break;
-            case 1200:
-                doubleSided[unit] = true;
-                sectorsPerTrack[unit] = 15;
-                break;
-            case 1440: // 3.5 inch
-                doubleSided[unit] = true;
-                sectorsPerTrack[unit] = 18;
-                break;
-            default:
-                std::cerr << "unhandled floppy image size " << fdSize << "(" << fdSize / 1024 << "k)\n";
-                // set... something
-                doubleSided[unit] = false;
-                sectorsPerTrack[unit] = 8;
-                break;
+            std::cerr << "unhandled floppy image size " << fdSize << "(" << fdSize / 1024 << "k)\n";
+            // set... something
+            doubleSided[unit] = false;
+            sectorsPerTrack[unit] = 8;
         }
 
         std::cout << "using " << (doubleSided[unit] ? 2 : 1) << " head(s) " << sectorsPerTrack[unit] << " sectors/track for floppy image\n";
