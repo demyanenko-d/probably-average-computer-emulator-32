@@ -166,21 +166,23 @@ void RAM_FUNC(VGACard::drawScanline)(int line, uint8_t *output)
         if((crtcRegs[0x17] & 1) == 0 && (line & 1))
             ptr0 += 0x2000;
 
+        uint8_t planeEnable = attribPlaneEnable;
+
         for(int i = 0; i < outputW / 8; i++)
         {
-            uint8_t byte0 = (attribPlaneEnable & (1 << 0)) ? ptr0[0x00000] : 0;
-            uint8_t byte1 = (attribPlaneEnable & (1 << 1)) ? ptr0[0x10000] : 0;
-            uint8_t byte2 = (attribPlaneEnable & (1 << 2)) ? ptr0[0x20000] : 0;
-            uint8_t byte3 = (attribPlaneEnable & (1 << 3)) ? ptr0[0x30000] : 0;
+            uint8_t byte0 = (planeEnable & (1 << 0)) ? ptr0[0x00000] : 0;
+            uint8_t byte1 = (planeEnable & (1 << 1)) ? ptr0[0x10000] : 0;
+            uint8_t byte2 = (planeEnable & (1 << 2)) ? ptr0[0x20000] : 0;
+            uint8_t byte3 = (planeEnable & (1 << 3)) ? ptr0[0x30000] : 0;
             ptr0++;
+
+            uint32_t v = byte0 | byte1 << 8 | byte2 << 16 | byte3 << 24;
 
             for(int j = 0; j < 8; j++)
             {
-                int col = byte0 >> 7 | (byte1 >> 7) << 1 | (byte2 >> 7) << 2 | (byte3 >> 7) << 3;
-                byte0 <<= 1;
-                byte1 <<= 1;
-                byte2 <<= 1;
-                byte3 <<= 1;
+                uint32_t tmp = v & 0x80808080;
+                uint8_t col = tmp >> 7 | tmp >> (8 + 6) | tmp >> (16 + 5) | tmp >> (24 + 4);
+                v <<= 1;
 
                 outputPixel(paletteLookup16(col));
             }
