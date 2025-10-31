@@ -717,49 +717,7 @@ void RAM_FUNC(CPU::executeInstruction)()
     // nextAddr is the address of the byte after the rm byte
     auto getDispEnd = [this, &addressSize32](uint8_t modRM, uint32_t nextAddr)
     {
-        auto mod = modRM >> 6;
-        auto rm = modRM & 7;
-
-        if(mod == 3)
-            return nextAddr;
-
-        if(addressSize32)
-        {
-            uint32_t ret = nextAddr;
-
-            if(rm == 4) // SIB
-                ret++;
-
-            if(mod == 0)
-            {
-                if(rm == 5)
-                    return ret + 4;
-
-                // disp instead of base
-                if(rm == 4)
-                {
-                    uint8_t sib;
-                    [[maybe_unused]] bool ok = readMem8(nextAddr, sib);
-                    assert(ok); // FIXME: make sure callers try to access the RM first so this can't happen
-
-                    if((sib & 7) == 5)
-                        ret += 4;
-                }
-            
-                return ret;
-            }
-
-            if(mod == 1)
-                return ret + 1;
-            if(mod == 2)
-                return ret + 4;
-        }
-        // else 16 bit
-
-        if(mod == 0)
-            return nextAddr + (rm == 6 ? 2 : 0);
-
-        return nextAddr + mod; // mod 1 == 8bit, mod 2 == 16bit  
+        return getRMDispEnd(modRM, nextAddr, addressSize32);
     };
 
     // with 16-bit operands the high bits of IP should be zeroed
@@ -6834,6 +6792,53 @@ std::tuple<uint32_t, CPU::Reg16> RAM_FUNC(CPU::getEffectiveAddress)(int mod, int
         memAddr &= 0xFFFF;
 
     return {memAddr, segBase};
+}
+
+uint32_t RAM_FUNC(CPU::getRMDispEnd)(uint8_t modRM, uint32_t nextAddr, bool addressSize32)
+{
+    auto mod = modRM >> 6;
+    auto rm = modRM & 7;
+
+    if(mod == 3)
+        return nextAddr;
+
+    if(addressSize32)
+    {
+        uint32_t ret = nextAddr;
+
+        if(rm == 4) // SIB
+            ret++;
+
+        if(mod == 0)
+        {
+            if(rm == 5)
+                return ret + 4;
+
+            // disp instead of base
+            if(rm == 4)
+            {
+                uint8_t sib;
+                [[maybe_unused]] bool ok = readMem8(nextAddr, sib);
+                assert(ok); // FIXME: make sure callers try to access the RM first so this can't happen
+
+                if((sib & 7) == 5)
+                    ret += 4;
+            }
+        
+            return ret;
+        }
+
+        if(mod == 1)
+            return ret + 1;
+        if(mod == 2)
+            return ret + 4;
+    }
+    // else 16 bit
+
+    if(mod == 0)
+        return nextAddr + (rm == 6 ? 2 : 0);
+
+    return nextAddr + mod; // mod 1 == 8bit, mod 2 == 16bit
 }
 
 CPU::SegmentDescriptor RAM_FUNC(CPU::loadSegmentDescriptor)(uint16_t selector)
