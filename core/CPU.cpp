@@ -5148,19 +5148,7 @@ void RAM_FUNC(CPU::executeInstruction)()
                         reg(Reg16::SP) = newSP + imm;
 
                     // check ES/DS/FS/GS descriptors against new CPL
-                    auto checkSeg = [this](Reg16 r)
-                    {
-                        auto desc = getCachedSegmentDescriptor(r);
-                        int dpl = (desc.flags & SD_PrivilegeLevel) >> 21;
-                        // dpl < cpl, data or non-conforming code
-                        if(dpl < cpl && (!(desc.flags & SD_Executable) || !(desc.flags & SD_DirConform)))
-                            setSegmentReg(r, 0); // reset to NULL
-                    };
-
-                    checkSeg(Reg16::ES);
-                    checkSeg(Reg16::DS);
-                    checkSeg(Reg16::FS);
-                    checkSeg(Reg16::GS);
+                    validateSegmentsForReturn();
                 }
                 else // same privilege
                 {
@@ -5373,19 +5361,7 @@ void RAM_FUNC(CPU::executeInstruction)()
                         reg(Reg16::SP) = newESP;
 
                     // check ES/DS/FS/GS descriptors against new CPL
-                    auto checkSeg = [this](Reg16 r)
-                    {
-                        auto desc = getCachedSegmentDescriptor(r);
-                        int dpl = (desc.flags & SD_PrivilegeLevel) >> 21;
-                        // dpl < cpl, data or non-conforming code
-                        if(dpl < cpl && (!(desc.flags & SD_Executable) || !(desc.flags & SD_DirConform)))
-                            setSegmentReg(r, 0); // reset to NULL
-                    };
-
-                    checkSeg(Reg16::ES);
-                    checkSeg(Reg16::DS);
-                    checkSeg(Reg16::FS);
-                    checkSeg(Reg16::GS);
+                    validateSegmentsForReturn();
                 }
                 else // return to same privilege
                 {
@@ -7299,6 +7275,24 @@ bool RAM_FUNC(CPU::checkStackSpace)(uint32_t sp, const SegmentDescriptor &ssDesc
     // check again if we crossed a page boundary
     endSP += ssDesc.base;
     return (endSP >> 12 == sp >> 12) || getPhysicalAddress(endSP, temp, true);
+}
+
+void RAM_FUNC(CPU::validateSegmentsForReturn)()
+{
+    // check ES/DS/FS/GS descriptors against new CPL for RET/IRET to outer privilege
+    auto checkSeg = [this](Reg16 r)
+    {
+        auto desc = getCachedSegmentDescriptor(r);
+        int dpl = (desc.flags & SD_PrivilegeLevel) >> 21;
+        // dpl < cpl, data or non-conforming code
+        if(dpl < cpl && (!(desc.flags & SD_Executable) || !(desc.flags & SD_DirConform)))
+            setSegmentReg(r, 0); // reset to NULL
+    };
+
+    checkSeg(Reg16::ES);
+    checkSeg(Reg16::DS);
+    checkSeg(Reg16::FS);
+    checkSeg(Reg16::GS);
 }
 
 // also address size, but with a different override prefix

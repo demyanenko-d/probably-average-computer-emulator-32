@@ -185,6 +185,8 @@ private:
     bool checkStackSpace(int words, bool op32, bool addr32);
     bool checkStackSpace(uint32_t sp, const SegmentDescriptor &ssDesc, int words, bool op32, bool addr32);
 
+    void validateSegmentsForReturn();
+
     bool isProtectedMode() {return reg(Reg32::CR0) & 1;}
     bool isOperandSize32(bool override);
     bool isStackAddressSize32();
