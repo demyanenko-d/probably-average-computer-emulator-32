@@ -59,7 +59,7 @@ public:
     bool needDMAUpdate() const {return dma.request & ~dma.mask;}
 
     // PIC access/helpers
-    bool hasInterrupt() const {return (pic[0].request & ~pic[0].mask) || (pic[1].request & ~pic[1].mask);}
+    bool hasInterrupt() const {return maskedPICRequest;}
     uint8_t getPICMask() const {return pic[0].mask;}
 
     void flagPICInterrupt(int index);
@@ -145,6 +145,8 @@ private:
         uint32_t nextUpdateCycle = 0;
     };
 
+    void updateMaskedPICRequest();
+
     void updatePIT();
     void calculateNextPITUpdate();
     void updateSpeaker(uint32_t target);
@@ -161,6 +163,7 @@ private:
     DMA dma;
 
     PIC pic[2];
+    uint16_t maskedPICRequest = 0;
 
     PIT pit;
 

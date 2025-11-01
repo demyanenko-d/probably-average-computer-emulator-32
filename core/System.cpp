@@ -292,6 +292,7 @@ void Chipset::write(uint16_t addr, uint8_t data)
             pic[0].write(1, data);
 
             sys.calculateNextInterruptCycle(sys.getCycleCount());
+            updateMaskedPICRequest();
 
             break;
         }
@@ -483,6 +484,7 @@ void Chipset::write(uint16_t addr, uint8_t data)
             pic[1].write(1, data);
 
             sys.calculateNextInterruptCycle(sys.getCycleCount());
+            updateMaskedPICRequest();
 
             break;
         }
@@ -632,6 +634,7 @@ void Chipset::flagPICInterrupt(int index)
     index &= 7;
 
     pic[picIndex].request |= 1 << index;
+    updateMaskedPICRequest();
 }
 
 void Chipset::setPICInput(int index, bool state)
@@ -652,6 +655,8 @@ void Chipset::setPICInput(int index, bool state)
 
     // update request for unmasked inputs
     pic[picIndex].request |= pic[picIndex].inputs & ~pic[picIndex].mask;
+
+    updateMaskedPICRequest();
 }
 
 uint8_t Chipset::acknowledgeInterrupt()
@@ -682,6 +687,8 @@ uint8_t Chipset::acknowledgeInterrupt()
         else if(serviceable & (1 << serviceIndex))
             break;
     }
+
+    maskedPICRequest &= ~(1 << serviceIndex);
 
     // map to 1st/second pic
     int picIndex = serviceIndex / 8;
@@ -918,6 +925,11 @@ void Chipset::PIC::write(int index, uint8_t data)
             request |= inputs & ~mask;
         }
     }
+}
+
+void Chipset::updateMaskedPICRequest()
+{
+    maskedPICRequest = (pic[0].request & ~pic[0].mask) | (pic[1].request & ~pic[1].mask) << 8;
 }
 
 void Chipset::updatePIT()
