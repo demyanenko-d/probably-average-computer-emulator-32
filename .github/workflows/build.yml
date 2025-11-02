@@ -57,13 +57,6 @@ jobs:
         path: pico-sdk
         submodules: true
 
-    # Linux dependencies
-    - name: Install Linux deps
-      if: runner.os == 'Linux'
-      run: |
-        sudo apt update && sudo apt install ${{matrix.apt-packages}}
-        pip3 install 32blit
-
     - uses: libsdl-org/setup-sdl@main
       id: sdl
       with:
