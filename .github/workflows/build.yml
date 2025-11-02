@@ -24,9 +24,9 @@ jobs:
             release-suffix: LIN64
             apt-packages: libsdl3-dev
 
-          #- os: windows-latest
-          #  name: Windows
-          #  release-suffix: WIN64
+          - os: windows-latest
+            name: Windows
+            release-suffix: WIN64
 
           #- os: ubuntu-24.04
           #  name: RP2350 Stamp XL
