@@ -1525,15 +1525,21 @@ void RAM_FUNC(CPU::executeInstruction)()
                 {
                     int cond = opcode2 & 0xF;
 
-                    int32_t off;
+                    uint32_t off;
 
                     if(operandSize32)
                     {
-                        if(!readMem32(addr + 2, off))
+                        if(!readMemIP32(addr + 2, off))
                             return;
                     }
-                    else if(!readMem16(addr + 2, off))
-                        return;
+                    else
+                    {
+                        uint16_t tmp;
+                        if(!readMemIP16(addr + 2, tmp))
+                            return;
+
+                        off = (tmp & 0x8000) ? (0xFFFF0000 | tmp) : tmp;
+                    }
 
                     if(getCondValue(cond))
                         setIP(reg(Reg32::EIP) + (operandSize32 ? 5 : 3) + off);
@@ -2613,7 +2619,7 @@ void RAM_FUNC(CPU::executeInstruction)()
             if(operandSize32)
             {
                 uint32_t imm;
-                if(!readMem32(addr + 1, imm))
+                if(!readMemIP32(addr + 1, imm))
                     return;
 
                 doSub(reg(Reg32::EAX), imm, flags);
@@ -2623,7 +2629,7 @@ void RAM_FUNC(CPU::executeInstruction)()
             else
             {
                 uint16_t imm;
-                if(!readMem16(addr + 1, imm))
+                if(!readMemIP16(addr + 1, imm))
                     return;
 
                 doSub(reg(Reg16::AX), imm, flags);
@@ -2864,14 +2870,14 @@ void RAM_FUNC(CPU::executeInstruction)()
   
             if(operandSize32)
             {
-                if(!readMem32(addr + 1, imm))
+                if(!readMemIP32(addr + 1, imm))
                     return;
 
                 reg(Reg32::EIP) += 4;
             }
             else
             {
-                if(!readMem16(addr + 1, imm))
+                if(!readMemIP16(addr + 1, imm))
                     return;
 
                 reg(Reg32::EIP) += 2;
@@ -2893,16 +2899,16 @@ void RAM_FUNC(CPU::executeInstruction)()
 
             if(operandSize32)
             {
-                int32_t imm;
+                uint32_t imm;
 
-                if(!readMem32(immAddr, imm))
+                if(!readMemIP32(immAddr, imm))
                     return;
 
                 uint32_t tmp;
                 if(!readRM32(modRM, tmp, addr))
                     break;
 
-                int64_t res = static_cast<int64_t>(static_cast<int32_t>(tmp)) * imm;
+                int64_t res = static_cast<int64_t>(static_cast<int32_t>(tmp)) * static_cast<int32_t>(imm);
                 reg(static_cast<Reg32>(r)) = res;
 
                 // check if upper half matches lower half's sign
@@ -2915,16 +2921,16 @@ void RAM_FUNC(CPU::executeInstruction)()
             }
             else
             {
-                int32_t imm;
+                uint16_t imm;
 
-                if(!readMem16(immAddr, imm))
+                if(!readMemIP16(immAddr, imm))
                     return;
 
                 uint16_t tmp;
                 if(!readRM16(modRM, tmp, addr))
                     break;
 
-                int32_t res = static_cast<int16_t>(tmp) * imm;
+                int32_t res = static_cast<int16_t>(tmp) * static_cast<int16_t>(imm);
                 reg(static_cast<Reg16>(r)) = res;
 
                 // check if upper half matches lower half's sign
@@ -3295,7 +3301,7 @@ void RAM_FUNC(CPU::executeInstruction)()
             if(operandSize32)
             {
                 uint32_t imm;
-                if(!readMem32(immAddr, imm))
+                if(!readMemIP32(immAddr, imm))
                     return;
 
                 uint32_t dest;
@@ -3335,7 +3341,7 @@ void RAM_FUNC(CPU::executeInstruction)()
             else
             {
                 uint16_t imm;
-                if(!readMem16(addr + immOff, imm))
+                if(!readMemIP16(immAddr, imm))
                     return;
 
                 uint16_t dest;
@@ -3820,20 +3826,20 @@ void RAM_FUNC(CPU::executeInstruction)()
 
             if(operandSize32)
             {
-                if(!readMem32(addr + 1, newIP))
+                if(!readMemIP32(addr + 1, newIP))
                     return;
 
                 offset += 4;
             }
             else
             {
-                if(!readMem16(addr + 1, newIP))
+                if(!readMemIP16(addr + 1, newIP))
                     return;
 
                 offset += 2;
             }
 
-            if(!readMem16(addr + offset, newCS))
+            if(!readMemIP16(addr + offset, newCS))
                 return;
 
             auto retAddr = reg(Reg32::EIP) + offset + 1 /*+2 for CS, -1 that was added by fetch*/;
@@ -3918,14 +3924,14 @@ void RAM_FUNC(CPU::executeInstruction)()
 
             if(addressSize32)
             {
-                if(!readMem32(addr + 1, memAddr))
+                if(!readMemIP32(addr + 1, memAddr))
                     return;
 
                 reg(Reg32::EIP) += 4;
             }
             else
             {
-                if(!readMem16(addr + 1, memAddr))
+                if(!readMemIP16(addr + 1, memAddr))
                     return;
 
                 reg(Reg32::EIP) += 2;
@@ -3944,14 +3950,14 @@ void RAM_FUNC(CPU::executeInstruction)()
 
             if(addressSize32)
             {
-                if(!readMem32(addr + 1, memAddr))
+                if(!readMemIP32(addr + 1, memAddr))
                     return;
 
                 reg(Reg32::EIP) += 4;
             }
             else
             {
-                if(!readMem16(addr + 1, memAddr))
+                if(!readMemIP16(addr + 1, memAddr))
                     return;
 
                 reg(Reg32::EIP) += 2;
@@ -3970,14 +3976,14 @@ void RAM_FUNC(CPU::executeInstruction)()
 
             if(addressSize32)
             {
-                if(!readMem32(addr + 1, memAddr))
+                if(!readMemIP32(addr + 1, memAddr))
                     return;
 
                 reg(Reg32::EIP) += 4;
             }
             else
             {
-                if(!readMem16(addr + 1, memAddr))
+                if(!readMemIP16(addr + 1, memAddr))
                     return;
 
                 reg(Reg32::EIP) += 2;
@@ -3997,14 +4003,14 @@ void RAM_FUNC(CPU::executeInstruction)()
 
             if(addressSize32)
             {
-                if(!readMem32(addr + 1, memAddr))
+                if(!readMemIP32(addr + 1, memAddr))
                     return;
 
                 reg(Reg32::EIP) += 4;
             }
             else
             {
-                if(!readMem16(addr + 1, memAddr))
+                if(!readMemIP16(addr + 1, memAddr))
                     return;
 
                 reg(Reg32::EIP) += 2;
@@ -4369,7 +4375,7 @@ void RAM_FUNC(CPU::executeInstruction)()
             if(operandSize32)
             {
                 uint32_t imm;
-                if(!readMem32(addr + 1, imm))
+                if(!readMemIP32(addr + 1, imm))
                     return;
 
                 doAnd(reg(Reg32::EAX), imm, flags);
@@ -4378,7 +4384,7 @@ void RAM_FUNC(CPU::executeInstruction)()
             else
             {
                 uint16_t imm;
-                if(!readMem16(addr + 1, imm))
+                if(!readMemIP16(addr + 1, imm))
                     return;
 
                 doAnd(reg(Reg16::AX), imm, flags);
@@ -4772,13 +4778,13 @@ void RAM_FUNC(CPU::executeInstruction)()
             {
                 auto r = static_cast<Reg32>(opcode & 7);
                 reg(Reg32::EIP) += 4;
-                readMem32(addr + 1, reg(r));
+                readMemIP32(addr + 1, reg(r));
             }
             else
             {
                 auto r = static_cast<Reg16>(opcode & 7);
                 reg(Reg32::EIP) += 2;
-                readMem16(addr + 1, reg(r));
+                readMemIP16(addr + 1, reg(r));
             }
             break;
         }
@@ -4841,7 +4847,7 @@ void RAM_FUNC(CPU::executeInstruction)()
         case 0xC2: // RET near, add to SP
         {
             uint16_t imm;
-            if(!readMem16(addr + 1, imm))
+            if(!readMemIP16(addr + 1, imm))
                 return;
             
             // pop from stack
@@ -4911,7 +4917,7 @@ void RAM_FUNC(CPU::executeInstruction)()
             if(operandSize32)
             {
                 uint32_t imm;
-                if(!readMem32(immAddr, imm))
+                if(!readMemIP32(immAddr, imm))
                     return;
 
                 reg(Reg32::EIP) += 5;
@@ -4920,7 +4926,7 @@ void RAM_FUNC(CPU::executeInstruction)()
             else
             {
                 uint16_t imm;
-                if(!readMem16(immAddr, imm))
+                if(!readMemIP16(immAddr, imm))
                     return;
 
                 reg(Reg32::EIP) += 3;
@@ -4933,7 +4939,7 @@ void RAM_FUNC(CPU::executeInstruction)()
         {
             uint16_t allocSize;
             uint8_t nestingLevel;
-            if(!readMem16(addr + 1, allocSize) || !readMemIP8(addr + 3, nestingLevel))
+            if(!readMemIP16(addr + 1, allocSize) || !readMemIP8(addr + 3, nestingLevel))
                 return;
             
             nestingLevel %= 32;
@@ -5041,7 +5047,7 @@ void RAM_FUNC(CPU::executeInstruction)()
         {
             // read the offset if needed
             uint16_t imm = 0;
-            if(opcode == 0xCA && !readMem16(addr + 1, imm))
+            if(opcode == 0xCA && !readMemIP16(addr + 1, imm))
                 return;
 
             uint32_t newIP, newCS;
@@ -5653,10 +5659,10 @@ void RAM_FUNC(CPU::executeInstruction)()
             
             if(operandSize32)
             {
-                if(!readMem32(addr + 1, off))
+                if(!readMemIP32(addr + 1, off))
                     return;
             }
-            else if(!readMem16(addr + 1, off))
+            else if(!readMemIP16(addr + 1, off))
                 return;
 
             // push
@@ -5674,10 +5680,10 @@ void RAM_FUNC(CPU::executeInstruction)()
             
             if(operandSize32)
             {
-                if(!readMem32(addr + 1, off))
+                if(!readMemIP32(addr + 1, off))
                     return;
             }
-            else if(!readMem16(addr + 1, off))
+            else if(!readMemIP16(addr + 1, off))
                 return;
 
             setIP(reg(Reg32::EIP) + immSize + off);
@@ -5692,20 +5698,20 @@ void RAM_FUNC(CPU::executeInstruction)()
 
             if(operandSize32)
             {
-                if(!readMem32(addr + 1, newIP))
+                if(!readMemIP32(addr + 1, newIP))
                     return;
 
                 offset += 4;
             }
             else
             {
-                if(!readMem16(addr + 1, newIP))
+                if(!readMemIP16(addr + 1, newIP))
                     return;
 
                 offset += 2;
             }
 
-            if(!readMem16(addr + offset, newCS))
+            if(!readMemIP16(addr + offset, newCS))
                 return;
 
             auto retAddr = reg(Reg32::EIP) + offset + 1 /*+2 for CS, -1 that was added by fetch*/;
@@ -5937,7 +5943,7 @@ void RAM_FUNC(CPU::executeInstruction)()
                     if(operandSize32)
                     {
                         uint32_t imm;
-                        if(!readMem32(immAddr, imm))
+                        if(!readMemIP32(immAddr, imm))
                             return;
 
                         doAnd(v, imm, flags);
@@ -5947,7 +5953,7 @@ void RAM_FUNC(CPU::executeInstruction)()
                     else
                     {
                         uint16_t imm;
-                        if(!readMem16(immAddr, imm))
+                        if(!readMemIP16(immAddr, imm))
                             return;
 
                         doAnd(uint16_t(v), imm, flags);
@@ -6517,6 +6523,79 @@ bool RAM_FUNC(CPU::readMemIP8)(uint32_t offset, int32_t &data)
     return true;
 }
 
+bool RAM_FUNC(CPU::readMemIP16)(uint32_t offset, uint16_t &data)
+{
+    // split if we cross a page boundary mid-read
+    if((offset & 0xFFF) > 0xFFE)
+    {
+        uint8_t tmp[2];
+
+        if(!readMemIP8(offset, tmp[0]) || !readMemIP8(offset + 1, tmp[1]))
+            return false;
+
+        data = tmp[0] | tmp[1] << 8;
+
+        return true;
+    }
+
+    // usual boundary check
+    if(linearIP >> 12 != offset >> 12)
+    {
+        uint32_t physAddr;
+        if(!getPhysicalAddress(offset, physAddr))
+            return false;
+
+        pcPtr = sys.mapAddress(physAddr) - offset;
+        linearIP = offset;
+    }
+
+    data = *reinterpret_cast<const uint16_t *>(pcPtr + offset);
+    return true;
+}
+
+bool RAM_FUNC(CPU::readMemIP16)(uint32_t offset, uint32_t &data)
+{
+    uint16_t tmp;
+    if(!readMemIP16(offset, tmp))
+        return false;
+
+    data = tmp;
+    return true;
+}
+
+bool RAM_FUNC(CPU::readMemIP32)(uint32_t offset, uint32_t &data)
+{
+    // split if we cross a page boundary mid-read
+    if((offset & 0xFFF) > 0xFFC)
+    {
+        uint8_t tmp[4];
+
+        if(!readMemIP8(offset    , tmp[0]) || !readMemIP8(offset + 1, tmp[1]) ||
+           !readMemIP8(offset + 2, tmp[2]) || !readMemIP8(offset + 3, tmp[3]))
+        {
+            return false;
+        }
+
+        data = tmp[0] | tmp[1] << 8 | tmp[2] << 16 | tmp[3] << 24;
+
+        return true;
+    }
+
+    // usual boundary check
+    if(linearIP >> 12 != offset >> 12)
+    {
+        uint32_t physAddr;
+        if(!getPhysicalAddress(offset, physAddr))
+            return false;
+
+        pcPtr = sys.mapAddress(physAddr) - offset;
+        linearIP = offset;
+    }
+
+    data = *reinterpret_cast<const uint32_t *>(pcPtr + offset);
+    return true;
+}
+
 bool RAM_FUNC(CPU::getPhysicalAddress)(uint32_t virtAddr, uint32_t &physAddr, bool forWrite, bool privileged)
 {
     // paging not enabled
@@ -6693,7 +6772,7 @@ std::tuple<uint32_t, CPU::Reg16> RAM_FUNC(CPU::getEffectiveAddress)(int mod, int
                 if(mod == 0 && base == Reg32::EBP)
                 {
                     // disp32 instead of base
-                    if(!readMem32(addr + 2, memAddr))
+                    if(!readMemIP32(addr + 2, memAddr))
                         return {0, Reg16::AX};
 
                     if(!rw)
@@ -6714,7 +6793,7 @@ std::tuple<uint32_t, CPU::Reg16> RAM_FUNC(CPU::getEffectiveAddress)(int mod, int
             case 5: // ~the same as 6 for 16-bit
                 if(mod == 0) // direct
                 {
-                    if(!readMem32(addr + 2, memAddr))
+                    if(!readMemIP32(addr + 2, memAddr))
                         return {0, Reg16::AX};
 
                     if(!rw)
@@ -6756,7 +6835,7 @@ std::tuple<uint32_t, CPU::Reg16> RAM_FUNC(CPU::getEffectiveAddress)(int mod, int
             case 6:
                 if(mod == 0) // direct
                 {
-                    if(!readMem16(addr + 2, memAddr))
+                    if(!readMemIP16(addr + 2, memAddr))
                         return {0, Reg16::AX};
 
                     if(!rw)
@@ -6792,7 +6871,7 @@ std::tuple<uint32_t, CPU::Reg16> RAM_FUNC(CPU::getEffectiveAddress)(int mod, int
         if(addressSize32) // 32bit
         {
             uint32_t disp;
-            if(!readMem32(addr + 2, disp))
+            if(!readMemIP32(addr + 2, disp))
                 return {0, Reg16::AX};
 
             if(!rw)
@@ -6803,7 +6882,7 @@ std::tuple<uint32_t, CPU::Reg16> RAM_FUNC(CPU::getEffectiveAddress)(int mod, int
         else //16bit
         {
             uint16_t disp;
-            if(!readMem16(addr + 2, disp))
+            if(!readMemIP16(addr + 2, disp))
                 return {0, Reg16::AX};
 
             if(!rw)
@@ -7587,7 +7666,7 @@ void CPU::doALU16AImm(uint32_t addr)
 {
     uint16_t imm;
     
-    if(!readMem16(addr + 1, imm))
+    if(!readMemIP16(addr + 1, imm))
         return;
 
     reg(Reg16::AX) = op(reg(Reg16::AX), imm, flags);
@@ -7600,7 +7679,7 @@ void CPU::doALU32AImm(uint32_t addr)
 {
     uint32_t imm;
     
-    if(!readMem32(addr + 1, imm))
+    if(!readMemIP32(addr + 1, imm))
         return;
 
     reg(Reg32::EAX) = op(reg(Reg32::EAX), imm, flags);

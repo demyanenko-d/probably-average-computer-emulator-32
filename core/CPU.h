@@ -160,6 +160,9 @@ private:
     // fast path for opcode/immediate fetch
     bool readMemIP8(uint32_t offset, uint8_t &data);
     bool readMemIP8(uint32_t offset, int32_t &data); // sign extended
+    bool readMemIP16(uint32_t offset, uint16_t &data);
+    bool readMemIP16(uint32_t offset, uint32_t &data); // zero extended
+    bool readMemIP32(uint32_t offset, uint32_t &data);
 
     // extra helpers
     bool readMem8 (uint32_t offset, uint32_t &data) {uint8_t  tmp; if(!readMem8 (offset, tmp)) return false; data = tmp; return true;}
