@@ -1449,7 +1449,10 @@ void RAM_FUNC(CPU::executeInstruction)()
                     auto r = ((modRM >> 3) & 0x7);
                     auto rm = static_cast<Reg32>(modRM & 0x7);
 
+#ifndef NDEBUG
                     printf("R DR%i @%08X\n", r, addr);
+#endif
+
                     reg(rm) = 0; // reg(r);
 
                     reg(Reg32::EIP) += 2;
@@ -1502,8 +1505,9 @@ void RAM_FUNC(CPU::executeInstruction)()
                     //auto r = static_cast<Reg32>(((modRM >> 3) & 0x7) + static_cast<int>(Reg32::CR0));
                     auto r = ((modRM >> 3) & 0x7);
                     auto rm = static_cast<Reg32>(modRM & 0x7);
-
+#ifndef NDEBUG
                     printf("W DR%i = %08X @%08X\n", r, reg(rm), addr);
+#endif
                     //reg(r) = reg(rm);
 
                     reg(Reg32::EIP) += 2;
