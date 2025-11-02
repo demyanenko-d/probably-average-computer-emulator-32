@@ -1478,6 +1478,9 @@ void RAM_FUNC(CPU::executeInstruction)()
                         // invalidate TLB
                         for(auto &entry : tlb)
                             entry.tag &= ~Page_Present;
+
+                        // also invalidate our special IP cache
+                        linearIP = 0;
                     }
 
                     reg(Reg32::EIP) += 2;
