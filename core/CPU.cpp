@@ -518,6 +518,53 @@ static T RAM_FUNC(doShift)(int exOp, T dest, int count, uint32_t &flags)
     return 0;
 }
 
+// checks a condition code
+// used by Jcc/SETcc
+static bool RAM_FUNC(getCondValue)(int cond, uint32_t flags)
+{
+    bool condVal;
+    switch(cond)
+    {
+        case 0x0: // JO
+        case 0x1: // JNO
+            condVal = flags & Flag_O;
+            break;
+        case 0x2: // JB/JNAE
+        case 0x3: // JAE/JNB
+            condVal = flags & Flag_C;
+            break;
+        case 0x4: // JE/JZ
+        case 0x5: // JNE/JNZ
+            condVal = flags & Flag_Z;
+            break;
+        case 0x6: // JBE/JNA
+        case 0x7: // JNBE/JA
+            condVal = flags & (Flag_C | Flag_Z);
+            break;
+        case 0x8: // JS
+        case 0x9: // JNS
+            condVal = flags & Flag_S;
+            break;
+        case 0xA: // JP/JPE
+        case 0xB: // JNP/JPO
+            condVal = flags & Flag_P;
+            break;
+        case 0xC: // JL/JNGE
+        case 0xD: // JNL/JGE
+            condVal = !!(flags & Flag_S) != !!(flags & Flag_O);
+            break;
+        case 0xE: // JLE/JNG
+        case 0xF: // JNLE/JG
+            condVal = !!(flags & Flag_S) != !!(flags & Flag_O) || (flags & Flag_Z);
+            break;
+    }
+
+    if(cond & 1)
+        condVal = !condVal;
+
+    return condVal;
+}
+
 CPU::CPU(System &sys) : sys(sys)
 {}
 
@@ -808,51 +855,6 @@ void RAM_FUNC(CPU::executeInstruction)()
         }
 
         return true;
-    };
-
-    auto getCondValue = [this](int cond)
-    {
-        bool condVal;
-        switch(cond)
-        {
-            case 0x0: // JO
-            case 0x1: // JNO
-                condVal = flags & Flag_O;
-                break;
-            case 0x2: // JB/JNAE
-            case 0x3: // JAE/JNB
-                condVal = flags & Flag_C;
-                break;
-            case 0x4: // JE/JZ
-            case 0x5: // JNE/JNZ
-                condVal = flags & Flag_Z;
-                break;
-            case 0x6: // JBE/JNA
-            case 0x7: // JNBE/JA
-                condVal = flags & (Flag_C | Flag_Z);
-                break;
-            case 0x8: // JS
-            case 0x9: // JNS
-                condVal = flags & Flag_S;
-                break;
-            case 0xA: // JP/JPE
-            case 0xB: // JNP/JPO
-                condVal = flags & Flag_P;
-                break;
-            case 0xC: // JL/JNGE
-            case 0xD: // JNL/JGE
-                condVal = !!(flags & Flag_S) != !!(flags & Flag_O);
-                break;
-            case 0xE: // JLE/JNG
-            case 0xF: // JNLE/JG
-                condVal = !!(flags & Flag_S) != !!(flags & Flag_O) || (flags & Flag_Z);
-                break;
-        }
-
-        if(cond & 1)
-            condVal = !condVal;
-
-        return condVal;
     };
 
     switch(opcode)
@@ -1549,7 +1551,7 @@ void RAM_FUNC(CPU::executeInstruction)()
                         off = (tmp & 0x8000) ? (0xFFFF0000 | tmp) : tmp;
                     }
 
-                    if(getCondValue(cond))
+                    if(getCondValue(cond, flags))
                         setIP(reg(Reg32::EIP) + (operandSize32 ? 5 : 3) + off);
                     else
                         reg(Reg32::EIP) += operandSize32 ? 5 : 3;
@@ -1579,7 +1581,7 @@ void RAM_FUNC(CPU::executeInstruction)()
 
                     reg(Reg32::EIP) += 2;
 
-                    writeRM8(modRM, getCondValue(cond) ? 1 : 0, addr + 1);
+                    writeRM8(modRM, getCondValue(cond, flags) ? 1 : 0, addr + 1);
                     break;
                 }
 
@@ -3238,7 +3240,7 @@ void RAM_FUNC(CPU::executeInstruction)()
             if(!readMemIP8(addr + 1, off))
                 return;
        
-            if(getCondValue(cond))
+            if(getCondValue(cond, flags))
                 setIP(reg(Reg32::EIP) + 1 + off);
             else
                 reg(Reg32::EIP)++;
