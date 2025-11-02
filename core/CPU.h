@@ -157,6 +157,10 @@ private:
     bool writeMem16(uint32_t offset, uint16_t data, bool privileged = false);
     bool writeMem32(uint32_t offset, uint32_t data, bool privileged = false);
 
+    // fast path for opcode/immediate fetch
+    bool readMemIP8(uint32_t offset, uint8_t &data);
+    bool readMemIP8(uint32_t offset, int32_t &data); // sign extended
+
     // extra helpers
     bool readMem8 (uint32_t offset, uint32_t &data) {uint8_t  tmp; if(!readMem8 (offset, tmp)) return false; data = tmp; return true;}
     // getTSSStackPointer uses this one
@@ -262,6 +266,9 @@ private:
     bool addressSize32;
 
     uint32_t faultIP;
+
+    uint32_t linearIP = 0; // the linear IP that was used to map pcPtr
+    const uint8_t *pcPtr = nullptr;
 
     // RAM
     System &sys;
