@@ -5628,7 +5628,7 @@ bool CPU::readMem8(uint32_t offset, uint8_t &data, bool privileged)
 bool CPU::readMem16(uint32_t offset, uint16_t &data, bool privileged)
 {
     // break up access if crossing page boundary
-    if((reg(Reg32::CR0) & (1 << 31)) && (offset & 0xFFF) == 0xFFF)
+    if((offset & 0xFFF) == 0xFFF)
     {
         uint8_t tmp[2];
 
@@ -5651,7 +5651,7 @@ bool CPU::readMem16(uint32_t offset, uint16_t &data, bool privileged)
 bool CPU::readMem32(uint32_t offset, uint32_t &data, bool privileged)
 {
     // break up access if crossing page boundary
-    if((reg(Reg32::CR0) & (1 << 31)) && (offset & 0xFFF) > 0xFFC)
+    if((offset & 0xFFF) > 0xFFC)
     {
         uint8_t tmp[4];
 
@@ -5688,7 +5688,7 @@ bool CPU::writeMem8(uint32_t offset, uint8_t data, bool privileged)
 bool CPU::writeMem16(uint32_t offset, uint16_t data, bool privileged)
 {
     // break up access if crossing page boundary
-    if((reg(Reg32::CR0) & (1 << 31)) && (offset & 0xFFF) > 0xFFC)
+    if((offset & 0xFFF) > 0xFFC)
     {
         // FIXME: what if the first page is valid, but the second isn't?
         return writeMem8(offset, data & 0xFF, privileged) && writeMem8(offset + 1, data >> 8, privileged);
@@ -5706,7 +5706,7 @@ bool CPU::writeMem16(uint32_t offset, uint16_t data, bool privileged)
 bool CPU::writeMem32(uint32_t offset, uint32_t data, bool privileged)
 {
     // break up access if crossing page boundary
-    if((reg(Reg32::CR0) & (1 << 31)) && (offset & 0xFFF) > 0xFFC)
+    if((offset & 0xFFF) > 0xFFC)
     {
         return writeMem8(offset    , data & 0xFF, privileged) && writeMem8(offset + 1, data >> 8 , privileged)
             && writeMem8(offset + 2, data >> 16 , privileged) && writeMem8(offset + 3, data >> 24, privileged);
