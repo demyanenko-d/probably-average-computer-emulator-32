@@ -1404,14 +1404,7 @@ uint32_t RAM_FUNC(System::readMem32)(uint32_t addr)
         return *reinterpret_cast<uint32_t *>(ptr + addr);
 
     // final attempt for complicated mappings
-    if(memReadCb && addr >= memAccessCbBase && addr < memAccessCbEnd)
-    {
-        return memReadCb(addr + 0, memAccessUserData)       |
-               memReadCb(addr + 1, memAccessUserData) << 8  |
-               memReadCb(addr + 2, memAccessUserData) << 16 |
-               memReadCb(addr + 3, memAccessUserData) << 24;
-    }
-    return 0xFFFFFFFF;
+    return readMem32WithCallback(addr);
 }
 
 void RAM_FUNC(System::writeMem)(uint32_t addr, uint8_t data)
@@ -1438,6 +1431,20 @@ void RAM_FUNC(System::writeMem)(uint32_t addr, uint8_t data)
 
     if(memWriteCb && addr >= memAccessCbBase && addr < memAccessCbEnd)
         memWriteCb(addr, data, memAccessUserData);
+}
+
+// this is split to a separate function to optimise the significantly more common case of accessing regular memory
+[[gnu::noinline]]
+uint32_t RAM_FUNC(System::readMem32WithCallback)(uint32_t addr)
+{
+    if(memReadCb && addr >= memAccessCbBase && addr < memAccessCbEnd)
+    {
+        return memReadCb(addr + 0, memAccessUserData)       |
+               memReadCb(addr + 1, memAccessUserData) << 8  |
+               memReadCb(addr + 2, memAccessUserData) << 16 |
+               memReadCb(addr + 3, memAccessUserData) << 24;
+    }
+    return 0xFFFFFFFF;
 }
 
 const uint8_t *System::mapAddress(uint32_t addr) const
