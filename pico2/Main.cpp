@@ -4,7 +4,6 @@
 #include "hardware/clocks.h"
 #include "hardware/irq.h"
 #include "hardware/timer.h"
-#include "hardware/riscv_platform_timer.h"
 #include "hardware/vreg.h"
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
@@ -16,6 +15,8 @@
 
 #include "config.h"
 #include "psram.h"
+
+#include "clock.pio.h"
 
 #include "Audio.h"
 #include "BIOS.h"
@@ -105,11 +106,18 @@ static void runEmulator(absolute_time_t &time)
 
 static void core1Main()
 {
-    // configure the riscv timer to count cycles so we can use it for the "system" clock
-    // (which is really just the PIT)
-    riscv_timer_set_fullspeed(true);
-    riscv_timer_set_enabled(true);
+    // configure clock PIO program
+    int offset = pio_add_program(pio1, &clock_program);
+    auto config = clock_program_get_default_config(offset);
 
+    // 3 cycles for program
+    float clkdiv = float(clock_get_hz(clk_sys)) / (System::getClockSpeed() * 3);
+    sm_config_set_clkdiv(&config, clkdiv);
+
+    pio_sm_init(pio1, 0, offset, &config);
+    pio_sm_set_enabled(pio1, 0, true);
+
+    // run
     auto time = get_absolute_time();
     while(true)
         runEmulator(time);
@@ -183,6 +191,9 @@ int main()
     tusb_init();
 
     stdio_init_all();
+
+    // before we init anything, reserve PIO1 SM0 for the clock program
+    pio_claim_sm_mask(pio1, 1 << 0);
 
     init_display();
     set_display_size(320, 200);

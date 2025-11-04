@@ -1,0 +1,7 @@
+.program clock
+.fifo txput
+
+loop:
+mov isr, ~x        ; invert so the counter appears to be going up
+mov rxfifo[0], isr ; move to rx fifo
+jmp x-- loop       ; loop is also the wrap, so this is just a decrement

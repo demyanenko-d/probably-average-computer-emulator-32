@@ -8,7 +8,7 @@
 #include "Scancode.h"
 
 #ifdef PICO_BUILD
-#include "hardware/riscv_platform_timer.h"
+#include "hardware/pio.h"
 #endif
 
 class System;
@@ -203,27 +203,14 @@ public:
 
     CPU &getCPU() {return cpu;}
 
-    uint32_t getCycleCount()
+    uint32_t getCycleCount() const
     {
 #ifdef PICO_BUILD
-        // TODO: assumes 250MHz clock (250 / 209 = ~1.196Mhz)
-        // technically we should adjust the upper bits periodically to have proper wraping
-        // but I don't think we need to worry about that...
-        auto mtime = riscv_timer_get_mtime();
-        auto diff = mtime - lastMtime;
-        assert(!(diff >> 32)); // if the CPU froze for several seconds we have problems
-
-        auto cycles = uint32_t(diff) / 209;
-
-        if(cycles)
-        {
-            cycleCount += cycles * pitClkDiv;
-            lastMtime += cycles * 209;
-        }
-        // avoiding this 64bit divide...
-        //cycleCount = (riscv_timer_get_mtime() / 209) * pitClkDiv;
-#endif
+        // sync the timer from the PIO program
+        return pio1->rxf_putget[0][0];
+#else
         return cycleCount;
+#endif
     }
 
     void addMemory(uint32_t base, uint32_t size, uint8_t *ptr);
@@ -255,7 +242,9 @@ public:
 
     void addCPUCycles(int cycles)
     {
+#ifndef PICO_BUILD
         cycleCount += cycles * cpuClkDiv;
+#endif
     }
 
     void updateForInterrupts();
@@ -287,10 +276,8 @@ private:
 
     CPU cpu;
 
+#ifndef PICO_BUILD
     uint32_t cycleCount = 0;
-
-#ifdef PICO_BUILD
-    uint64_t lastMtime = 0;
 #endif
 
     static const int maxAddress = 1 << 24;
