@@ -354,6 +354,13 @@ static T doDoubleShiftLeft(T dest, T src, int count, uint32_t &flags)
 
     int maxBits = sizeof(T) * 8;
 
+    // shifting by > 16 with a 16bit operand sort of turns into a rotate?
+    if(sizeof(T) == 2 && count > maxBits)
+    {
+        count -= maxBits;
+        dest = src;
+    }
+
     bool carry = count > maxBits ? 0 : dest & (1 << (maxBits - count));
 
     T res = count >= maxBits ? 0 : dest << count;
@@ -431,6 +438,13 @@ static T doDoubleShiftRight(T dest, T src, int count, uint32_t &flags)
         return dest;
 
     int maxBits = sizeof(T) * 8;
+
+    // shifting by > 16 with a 16bit operand sort of turns into a rotate?
+    if(sizeof(T) == 2 && count > maxBits)
+    {
+        count -= maxBits;
+        dest = src;
+    }
 
     bool carry = count > maxBits ? 0 : dest & (1 << (count - 1));
 
