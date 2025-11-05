@@ -535,6 +535,7 @@ static T doShift(int exOp, T dest, int count, uint32_t &flags)
         case 3: // RCR
             return doRotateRightCarry(dest, count, flags);
         case 4: // SHL
+        case 6: // alias
             return doShiftLeft(dest, count, flags);
         case 5: // SHR
             return doShiftRight(dest, count, flags);
@@ -3717,6 +3718,7 @@ void CPU::executeInstruction()
             switch(exOp)
             {
                 case 0: // TEST imm
+                case 1: // alias
                 {
                     uint8_t imm;
                     if(!readMemIP8(getDispEnd(modRM, addr + 2), imm))
@@ -3727,7 +3729,6 @@ void CPU::executeInstruction()
                     reg(Reg32::EIP) += 2;
                     break;
                 }
-                // 1 is invalid
                 case 2: // NOT
                 {
                     reg(Reg32::EIP)++;
@@ -3835,6 +3836,7 @@ void CPU::executeInstruction()
             switch(exOp)
             {
                 case 0: // TEST imm
+                case 1: // alias
                 {
                     auto immAddr = getDispEnd(modRM, addr + 2);
                     if(operandSize32)
@@ -3860,7 +3862,6 @@ void CPU::executeInstruction()
 
                     break;
                 }
-                // 1 is invalid
                 case 2: // NOT
                 {
                     reg(Reg32::EIP)++;
