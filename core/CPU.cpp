@@ -6646,10 +6646,13 @@ bool CPU::validateLOCKPrefix(uint8_t opcode, uint32_t addr)
     if(opcode == 0x0F)
     {} // check it when we have the 2nd opcode byte
     // allow x0-x3,x8-xB for ALU ops
-    else if(opcode < 0x34 && (opcode & 4))
+    else if(opcode < 0x34)
     {
-        fault(Fault::UD);
-        return false;
+        if(opcode & 4)
+        {
+            fault(Fault::UD);
+            return false;
+        }
     }
     // nothing in 34-7F, 88-F5
     // 84/85 are TEST
