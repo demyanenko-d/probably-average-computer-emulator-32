@@ -209,7 +209,7 @@ void FloppyController::write(uint16_t addr, uint8_t data)
 
                     // read first sector
                     bool failed = false;
-                    if(!io || !io->read(unit, sectorBuf, cylinder, head, record))
+                    if(!io || !io->read(unit, sectorBuf, io->getLBA(unit, cylinder, head, record)))
                         failed = true;
 
                     status[0] = unit | head << 2;
@@ -354,7 +354,7 @@ uint8_t FloppyController::dmaRead(int ch)
         }
 
         // attempt to read next sector
-        if(!io || !io->read(unit, sectorBuf, cylinder, head, record))
+        if(!io || !io->read(unit, sectorBuf, io->getLBA(unit, cylinder, head, record)))
             status[0] |= 1 << 6; // error (TODO: should we stop the DMA now?)
 
         sectorBufOffset = 0;
@@ -376,7 +376,7 @@ void FloppyController::dmaWrite(int ch, uint8_t data)
         auto &record = command[4];
         auto endOfTrack = command[6];
 
-        if(!io || !io->write(unit, sectorBuf, cylinder, head, record))
+        if(!io || !io->write(unit, sectorBuf, io->getLBA(unit, cylinder, head, record)))
             status[0] |= 1 << 6; // error (TODO: should we stop the DMA now?)
 
         // update offset

@@ -10,26 +10,26 @@ bool FileFloppyIO::isPresent(int unit)
     return unit < maxDrives && file[unit].is_open();
 }
 
-bool FileFloppyIO::read(int unit, uint8_t *buf, uint8_t cylinder, uint8_t head, uint8_t sector)
+uint32_t FileFloppyIO::getLBA(int unit, uint8_t cylinder, uint8_t head, uint8_t sector)
+{
+    int heads = doubleSided[unit] ? 2 : 1;
+    return ((cylinder * heads + head) * sectorsPerTrack[unit]) + sector - 1;
+}
+
+bool FileFloppyIO::read(int unit, uint8_t *buf, uint32_t lba)
 {
     if(unit >= maxDrives)
         return false;
-
-    int heads = doubleSided[unit] ? 2 : 1;
-    auto lba = ((cylinder * heads + head) * sectorsPerTrack[unit]) + sector - 1;
 
     file[unit].clear();
 
     return file[unit].seekg(lba * 512).read(reinterpret_cast<char *>(buf), 512).gcount() == 512;
 }
 
-bool FileFloppyIO::write(int unit, const uint8_t *buf, uint8_t cylinder, uint8_t head, uint8_t sector)
+bool FileFloppyIO::write(int unit, const uint8_t *buf, uint32_t lba)
 {
     if(unit >= maxDrives)
         return false;
-
-    int heads = doubleSided[unit] ? 2 : 1;
-    auto lba = ((cylinder * heads + head) * sectorsPerTrack[unit]) + sector - 1;
 
     file[unit].clear();
 

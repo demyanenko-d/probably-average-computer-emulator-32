@@ -7,11 +7,13 @@ public:
     // is there a disk in the drive
     virtual bool isPresent(int unit) = 0;
 
+    virtual uint32_t getLBA(int unit, uint8_t cylinder, uint8_t head, uint8_t sector) = 0;
+
     // reads a 512 byte sector
-    virtual bool read(int unit, uint8_t *buf, uint8_t cylinder, uint8_t head, uint8_t sector) = 0;
+    virtual bool read(int unit, uint8_t *buf, uint32_t lba) = 0;
 
     // writes a 512 byte sector
-    virtual bool write(int device, const uint8_t *buf, uint8_t cylinder, uint8_t head, uint8_t sector) = 0;
+    virtual bool write(int device, const uint8_t *buf, uint32_t lba) = 0;
 };
 
 class FloppyController final : public IODevice
