@@ -249,6 +249,11 @@ int main()
 
     while(true)
     {
+        // TODO: callback from VGA? kinda hard to know when a mode change is done
+        auto [width, height] = vga.getOutputResolution();
+        set_display_size(width, height);
+        update_display();
+
         tuh_task();
     }
 
