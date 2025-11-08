@@ -399,6 +399,33 @@ void ATAController::write(uint16_t addr, uint8_t data)
         }
 
         case 0x376: // device control
+            if(data & (1 << 2)) // SRST
+            {
+                int dev = (deviceHead >> 4) & 1;
+
+                // signature
+                sectorCount = 1;
+                lbaLowSector = 1;
+                lbaMidCylinderLow = 0;
+                lbaHighCylinderHigh = 0;
+                
+                if(io && io->isATAPI(dev))
+                {
+                    // signature
+                    lbaMidCylinderLow = 0x14;
+                    lbaHighCylinderHigh = 0xEB;
+                    deviceHead &= (1 << 4); // don't change DEV bit
+
+                    status &= ~(Status_BSY | Status_DRDY | Status_DF | Status_DRQ | Status_ERR);
+                }
+                else
+                {
+                    deviceHead = 0;
+
+                    status &= ~(Status_BSY | Status_DRQ | Status_ERR);
+                    status |= Status_DRDY;
+                }
+            }
             deviceControl = data;
             break;
         default:
