@@ -37,6 +37,10 @@
 #define SD_MISO   19
 #define SD_CS     22
 
+// until I finish the driver, these are just to make sure the pins are pulled up
+#define SD_DAT1   20
+#define SD_DAT2   21
+
 #elif defined(PIMORONI_PICO_PLUS2_RP2350)
 // as I was using a mess of jumper wires, there's not really a right answer here
 #define DVI_CLK_P 14
