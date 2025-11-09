@@ -58,7 +58,7 @@ jobs:
         submodules: true
 
     - uses: libsdl-org/setup-sdl@main
-      if: !matrix.is-pico
+      if: ${{!matrix.is-pico}}
       id: sdl
       with:
         install-linux-dependencies: true
