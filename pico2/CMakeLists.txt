@@ -49,6 +49,16 @@ target_sources(PACEPico2 PRIVATE
     Display_${DISPLAY_DRIVER}.cpp
 )
 
+# UART config
+if(PICO_BOARD STREQUAL "pimoroni_pico_plus2_rp2350" AND EXTRA_BOARD STREQUAL "vgaboard")
+    # VGA pins are in the way of the default UART, redirect to the SP/CE connector
+    target_compile_definitions(PACEPico2 PRIVATE
+        PICO_DEFAULT_UART=0
+        PICO_DEFAULT_UART_TX_PIN=32
+        PICO_DEFAULT_UART_RX_PIN=35
+    )
+endif()
+
 # faster flash access
 target_compile_definitions(PACEPico2 PRIVATE PICO_EMBED_XIP_SETUP=1)
 # for config.h
