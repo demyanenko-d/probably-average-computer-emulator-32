@@ -56,3 +56,9 @@
 #else
 #error "No board configuration!"
 #endif
+
+// default to using built-in LED for disk activity
+#if !defined(DISK_IO_LED_PIN) && defined(PICO_DEFAULT_LED_PIN)
+#define DISK_IO_LED_PIN PICO_DEFAULT_LED_PIN
+#define DISK_IO_LED_ACTIVE 1
+#endif
