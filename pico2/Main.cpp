@@ -2,6 +2,7 @@
 #include <string_view>
 
 #include "hardware/clocks.h"
+#include "hardware/dma.h"
 #include "hardware/irq.h"
 #include "hardware/timer.h"
 #include "hardware/vreg.h"
@@ -16,13 +17,17 @@
 #include "config.h"
 #include "psram.h"
 
+// need to include this after config.h
+#ifdef PIO_USB_HOST
+#include "pio_usb_configuration.h"
+#endif
+
 #include "clock.pio.h"
 
 #include "Audio.h"
 #include "BIOS.h"
 #include "DiskIO.h"
 #include "Display.h"
-
 
 #include "ATAController.h"
 #include "FloppyController.h"
@@ -137,6 +142,29 @@ static void core1Main()
     irq_set_exclusive_handler(SIO_FIFO_IRQ_NUM(1), core1FIFOHandler);
     irq_set_enabled(SIO_FIFO_IRQ_NUM(1), true);
 
+    // configure PIO USB host here
+#ifdef PIO_USB_HOST
+
+#ifdef PICO_DEFAULT_PIO_USB_VBUSEN_PIN
+    gpio_init(PICO_DEFAULT_PIO_USB_VBUSEN_PIN);
+    gpio_set_dir(PICO_DEFAULT_PIO_USB_VBUSEN_PIN, GPIO_OUT);
+    gpio_put(PICO_DEFAULT_PIO_USB_VBUSEN_PIN, PICO_DEFAULT_PIO_USB_VBUSEN_STATE);
+#endif
+
+    pio_usb_configuration_t pioHostConfig = PIO_USB_DEFAULT_CONFIG;
+    // find an unused channel, then unclaim it again so PIO USB can claim it...
+    pioHostConfig.tx_ch = dma_claim_unused_channel(true);
+    dma_channel_unclaim(pioHostConfig.tx_ch);
+
+    tuh_configure(BOARD_TUH_RHPORT, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pioHostConfig);
+
+    tusb_rhport_init_t hostInit = {
+        .role = TUSB_ROLE_HOST,
+        .speed = TUSB_SPEED_AUTO
+    };
+    tusb_init(BOARD_TUH_RHPORT, &hostInit);
+#endif
+
     // run
     auto time = get_absolute_time();
     while(true)
@@ -216,11 +244,17 @@ int main()
 {
     set_sys_clock_khz(250000, false);
 
+// with all the display handling here, there isn't enough CPU time on core0 for PIO USB
+// also adjust the clock a bit
+#ifdef PIO_USB_HOST
+    set_sys_clock_khz(252000, true); // multiple of 12
+#else
     tusb_rhport_init_t hostInit = {
         .role = TUSB_ROLE_HOST,
         .speed = TUSB_SPEED_AUTO
     };
     tusb_init(BOARD_TUH_RHPORT, &hostInit);
+#endif
 
     stdio_init_all();
 
