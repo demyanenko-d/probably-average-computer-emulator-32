@@ -76,6 +76,13 @@ pico_add_link_depend(PACEPico2 ${CMAKE_CURRENT_LIST_DIR}/memmap.ld)
 # usual setup
 target_link_libraries(PACEPico2 PACECore PACEPicoShared PACEPicoBIOS hardware_dma hardware_spi pico_multicore pico_stdlib)
 
+# additionally link to pio usb if needed by board
+if(PICO_BOARD STREQUAL "adafruit_fruit_jam")
+    message("Using PIO USB host!")
+    target_link_libraries(PACEPico2 tinyusb_pico_pio_usb)
+    target_compile_definitions(PACEPico2 PRIVATE PIO_USB_HOST)
+endif()
+
 pico_enable_stdio_uart(PACEPico2 1)
 pico_add_extra_outputs(PACEPico2)
 
