@@ -91,7 +91,9 @@ static const uint32_t vactive_line[] = {
 
 // DMA logic
 
+#ifndef HSTX_DMA_CH_BASE
 #define HSTX_DMA_CH_BASE 0
+#endif
 #define HSTX_NUM_DMA_CHANNELS 3
 #define HSTX_NUM_LINE_BUFFERS 4
 
