@@ -72,6 +72,12 @@ jobs:
         path: pico-sdk
         submodules: true
 
+    # need to install Pico-PIO-USB for fruit jam
+    - name: Get TinyUSB deps
+      working-directory: ${{runner.workspace}}/pico-sdk
+      if: matrix.is-pico
+      run: libs/tinyusb/tools/get_deps.py rp2040
+
     # Linux dependencies
     - name: Install Linux deps
       if: ${{runner.os == 'Linux' && matrix.apt-packages}}
