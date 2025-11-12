@@ -6388,7 +6388,10 @@ bool CPU::setSegmentReg(Reg16 r, uint16_t value, bool checkFaults)
         reg(r) = value;
 
         if(r == Reg16::CS)
+        {
             cpl = value & 3;
+            codeSizeBit = getCachedSegmentDescriptor(Reg16::CS).flags & SD_Size;
+        }
         else if(r == Reg16::SS)
             stackAddrSize32 = getCachedSegmentDescriptor(Reg16::SS).flags & SD_Size;
     }
@@ -6402,6 +6405,7 @@ bool CPU::setSegmentReg(Reg16 r, uint16_t value, bool checkFaults)
         {
             desc.flags &= ~SD_PrivilegeLevel; // clear privilege level
             desc.limit = 0xFFFF;
+            codeSizeBit = false;
         }
         else if(r == Reg16::SS)
             stackAddrSize32 = false;
@@ -6726,19 +6730,7 @@ bool CPU::validateLOCKPrefix(uint8_t opcode, uint32_t addr)
 // also address size, but with a different override prefix
 bool CPU::isOperandSize32(bool override)
 {
-    if(isProtectedMode() && !(flags & Flag_VM))
-    {
-        // D bit in CS descriptor
-        bool ret = getCachedSegmentDescriptor(Reg16::CS).flags & SD_Size;
-
-        // override inverts
-        if(override)
-            ret = !ret;
-
-        return ret;
-    }
-
-    return override;
+    return codeSizeBit != override;
 }
 
 bool CPU::readRM8(uint8_t modRM, uint8_t &v, uint32_t addr, int additionalOffset)

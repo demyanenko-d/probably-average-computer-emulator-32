@@ -296,6 +296,7 @@ private:
     Reg16 segmentOverride;
     bool addressSize32;
     bool stackAddrSize32;
+    bool codeSizeBit; // used to calculate operand/address size
 
     uint32_t faultIP;
 
