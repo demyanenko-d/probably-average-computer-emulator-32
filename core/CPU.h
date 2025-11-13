@@ -130,6 +130,28 @@ private:
         Selector_CallGate = 1 << 1, // CS selector for a call gate is always handled as conforming
     };
 
+    struct RM
+    {
+        Reg16 reg;
+        Reg16 rmBase; // register if direct, segment if indirect
+        uint32_t offset; // indirect displacement
+
+        bool isValid() const {return rmBase != Reg16::IP;}
+        bool isReg() const {return static_cast<int>(rmBase) < static_cast<int>(Reg16::IP);}
+
+        Reg8  reg8 () const {return static_cast<Reg8 >(reg);}
+        Reg16 reg16() const {return reg;}
+        Reg32 reg32() const {return static_cast<Reg32>(reg);}
+
+        Reg16 segReg() const {return static_cast<Reg16>(static_cast<int>(reg) + static_cast<int>(Reg16::ES));}
+
+        int op() const {return static_cast<int>(reg);}
+
+        Reg8  rmBase8 () const {return static_cast<Reg8 >(rmBase);}
+        Reg16 rmBase16() const {return rmBase;}
+        Reg32 rmBase32() const {return static_cast<Reg32>(rmBase);}
+    };
+
     struct SegmentDescriptor
     {
         uint32_t flags;
@@ -173,8 +195,10 @@ private:
 
     bool lookupPageTable(uint32_t virtAddr, uint32_t &physAddr, bool forWrite, bool user);
 
-    std::tuple<uint32_t, Reg16> getEffectiveAddress(int mod, int rm, bool rw, uint32_t addr);
-    uint32_t getRMDispEnd(uint8_t modRM, uint32_t nextAddr, bool addressSize32);
+    std::tuple<uint32_t, Reg16> getEffectiveAddress(int mod, int rm, uint32_t &addr);
+
+    RM readModRM(uint32_t addr, uint32_t &endAddr);
+    RM readModRM(uint32_t addr) {uint32_t tmp; return readModRM(addr, tmp);}
 
     SegmentDescriptor &getCachedSegmentDescriptor(Reg16 r) {return segmentDescriptorCache[static_cast<int>(r) - static_cast<int>(Reg16::ES)];}
     uint32_t getSegmentOffset(Reg16 r) {return getCachedSegmentDescriptor(r).base;}
@@ -202,14 +226,13 @@ private:
     bool isOperandSize32(bool override);
 
     // R/M helpers
+    bool readRM8 (const RM &rm, uint8_t  &v);
+    bool readRM16(const RM &rm, uint16_t &v);
+    bool readRM32(const RM &rm, uint32_t &v);
 
-    bool readRM8(uint8_t modRM, uint8_t &v, uint32_t addr, int additionalOffset = 0);
-    bool readRM16(uint8_t modRM, uint16_t &v, uint32_t addr, int additionalOffset = 0);
-    bool readRM32(uint8_t modRM, uint32_t &v, uint32_t addr, int additionalOffset = 0);
-
-    bool writeRM8(uint8_t modRM, uint8_t v, uint32_t addr, bool rw = false, int additionalOffset = 0);
-    bool writeRM16(uint8_t modRM, uint16_t v, uint32_t addr, bool rw = false, int additionalOffset = 0);
-    bool writeRM32(uint8_t modRM, uint32_t v, uint32_t addr, bool rw = false, int additionalOffset = 0);
+    bool writeRM8 (const RM &rm, uint8_t  v);
+    bool writeRM16(const RM &rm, uint16_t v);
+    bool writeRM32(const RM &rm, uint32_t v);
 
     // ALU helpers
     using ALUOp8 = uint8_t(*)(uint8_t, uint8_t, uint32_t &);

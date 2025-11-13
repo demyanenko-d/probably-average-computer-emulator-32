@@ -741,13 +741,6 @@ void CPU::executeInstruction()
     bool operandSize32 = isOperandSize32(operandSizeOverride);
     addressSize32 = isOperandSize32(addressSizeOverride);
 
-    // returns address after end of modr/m and disp
-    // nextAddr is the address of the byte after the rm byte
-    auto getDispEnd = [this](uint8_t modRM, uint32_t nextAddr)
-    {
-        return getRMDispEnd(modRM, nextAddr, addressSize32);
-    };
-
     // with 16-bit operands the high bits of IP should be zeroed
     auto setIP = [this, &operandSize32](uint32_t newIP)
     {
@@ -1104,47 +1097,41 @@ void CPU::executeInstruction()
 
         case 0x38: // CMP r/m8 r8
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
 
-            auto r = (modRM >> 3) & 0x7;
-
             uint8_t dest;
-            if(!readRM8(modRM, dest, addr))
+            if(!readRM8(rm, dest))
                 break;
 
-            auto srcReg = static_cast<Reg8>(r);
-
-            doSub(dest, reg(srcReg),flags);
+            doSub(dest, reg(rm.reg8()), flags);
 
             reg(Reg32::EIP)++;
             break;
         }
         case 0x39: // CMP r/m16 r16
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
-
-            auto r = (modRM >> 3) & 0x7;
 
             if(operandSize32)
             {
-                auto src = reg(static_cast<Reg32>(r));
+                auto src = reg(rm.reg32());
 
                 uint32_t dest;
-                if(!readRM32(modRM, dest, addr))
+                if(!readRM32(rm, dest))
                     break;
 
                 doSub(dest, src, flags);
             }
             else
             {
-                auto src = reg(static_cast<Reg16>(r));
+                auto src = reg(rm.reg16());
 
                 uint16_t dest;
-                if(!readRM16(modRM, dest, addr))
+                if(!readRM16(rm, dest))
                     break;
 
                 doSub(dest, src, flags);
@@ -1155,50 +1142,40 @@ void CPU::executeInstruction()
         }
         case 0x3A: // CMP r8 r/m8
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
 
-            auto r = (modRM >> 3) & 0x7;
-
             uint8_t src;
-            if(!readRM8(modRM, src, addr))
+            if(!readRM8(rm, src))
                 break;
 
-            auto dstReg = static_cast<Reg8>(r);
-
-            doSub(reg(dstReg), src, flags);
+            doSub(reg(rm.reg8()), src, flags);
 
             reg(Reg32::EIP)++;
             break;
         }
         case 0x3B: // CMP r16 r/m16
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
-
-            auto r = (modRM >> 3) & 0x7;
 
             if(operandSize32)
             {
                 uint32_t src;
-                if(!readRM32(modRM, src, addr))
+                if(!readRM32(rm, src))
                     break;
 
-                auto dstReg = static_cast<Reg32>(r);
-
-                doSub(reg(dstReg), src, flags);
+                doSub(reg(rm.reg32()), src, flags);
             }
             else
             {
                 uint16_t src;
-                if(!readRM16(modRM, src, addr))
+                if(!readRM16(rm, src))
                     break;
 
-                auto dstReg = static_cast<Reg16>(r);
-
-                doSub(reg(dstReg), src, flags);
+                doSub(reg(rm.reg16()), src, flags);
             }
 
             reg(Reg32::EIP)++;
@@ -1391,24 +1368,18 @@ void CPU::executeInstruction()
 
         case 0x62: // BOUND
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
-                return;
-
-            auto r = (modRM >> 3) & 0x7;
-
-            auto [offset, segment] = getEffectiveAddress(modRM >> 6, modRM & 7, false, addr);
-            if(segment == Reg16::AX)
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
 
             int32_t index, lower, upper;
 
             if(operandSize32)
             {
-                index = static_cast<int32_t>(reg(static_cast<Reg32>(r)));
+                index = static_cast<int32_t>(reg(rm.reg32()));
                 uint32_t tmpL, tmpU;
 
-                if(!readMem32(offset, segment, tmpL) || !readMem32(offset + 4, segment, tmpU))
+                if(!readMem32(rm.offset, rm.rmBase, tmpL) || !readMem32(rm.offset + 4, rm.rmBase, tmpU))
                     break;
 
                 lower = static_cast<int32_t>(tmpL);
@@ -1416,10 +1387,10 @@ void CPU::executeInstruction()
             }
             else
             {
-                index = static_cast<int16_t>(reg(static_cast<Reg16>(r)));
+                index = static_cast<int16_t>(reg(rm.reg16()));
                 uint16_t tmpL, tmpU;
 
-                if(!readMem16(offset, segment, tmpL) || !readMem16(offset + 2, segment, tmpU))
+                if(!readMem16(rm.offset, rm.rmBase, tmpL) || !readMem16(rm.offset + 2, rm.rmBase, tmpU))
                     break;
 
                 lower = static_cast<int16_t>(tmpL);
@@ -1440,24 +1411,23 @@ void CPU::executeInstruction()
                 fault(Fault::UD);
             else
             {
-                uint8_t modRM;
-                if(!readMemIP8(addr + 1, modRM))
+                auto rm = readModRM(addr + 1);
+                if(!rm.isValid())
                     return;
 
-                auto r = static_cast<Reg16>((modRM >> 3) & 0x7);
                 reg(Reg32::EIP)++;
 
                 uint16_t dest;
-                if(!readRM16(modRM, dest, addr))
+                if(!readRM16(rm, dest))
                     break;
 
                 auto destRPL = dest & 3;
-                auto srcRPL = reg(r) & 3;
+                auto srcRPL = reg(rm.reg16()) & 3;
 
                 if(destRPL < srcRPL)
                 {
                     flags |= Flag_Z;
-                    writeRM16(modRM, (dest & ~3) | srcRPL, addr, true);
+                    writeRM16(rm, (dest & ~3) | srcRPL);
                 }
                 else
                     flags &= ~Flag_Z;
@@ -1490,13 +1460,10 @@ void CPU::executeInstruction()
 
         case 0x69: // IMUL imm
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            uint32_t immAddr;
+            auto rm = readModRM(addr + 1, immAddr);
+            if(!rm.isValid())
                 return;
-
-            auto r = (modRM >> 3) & 0x7;
-   
-            auto immAddr = getDispEnd(modRM, addr + 2);
 
             if(operandSize32)
             {
@@ -1506,10 +1473,10 @@ void CPU::executeInstruction()
                     return;
 
                 uint32_t tmp;
-                if(!readRM32(modRM, tmp, addr))
+                if(!readRM32(rm, tmp))
                     break;
 
-                reg(static_cast<Reg32>(r)) = doMultiplySigned(static_cast<int32_t>(tmp), static_cast<int32_t>(imm), flags);
+                reg(rm.reg32()) = doMultiplySigned(static_cast<int32_t>(tmp), static_cast<int32_t>(imm), flags);
 
                 reg(Reg32::EIP) += 5;
             }
@@ -1521,10 +1488,10 @@ void CPU::executeInstruction()
                     return;
 
                 uint16_t tmp;
-                if(!readRM16(modRM, tmp, addr))
+                if(!readRM16(rm, tmp))
                     break;
 
-                reg(static_cast<Reg16>(r)) = doMultiplySigned(static_cast<int16_t>(tmp), static_cast<int16_t>(imm), flags);
+                reg(rm.reg16()) = doMultiplySigned(static_cast<int16_t>(tmp), static_cast<int16_t>(imm), flags);
 
                 reg(Reg32::EIP) += 3;
             }
@@ -1546,31 +1513,30 @@ void CPU::executeInstruction()
 
         case 0x6B: // IMUL sign extended byte
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            uint32_t immAddr;
+            auto rm = readModRM(addr + 1, immAddr);
+            if(!rm.isValid())
                 return;
 
-            auto r = (modRM >> 3) & 0x7;
-
             int32_t imm;
-            if(!readMemIP8(getDispEnd(modRM, addr + 2), imm))
+            if(!readMemIP8(immAddr, imm))
                 return;
 
             if(operandSize32)
             {
                 uint32_t tmp;
-                if(!readRM32(modRM, tmp, addr))
+                if(!readRM32(rm, tmp))
                     break;
 
-                reg(static_cast<Reg32>(r)) = doMultiplySigned(static_cast<int32_t>(tmp), imm, flags);
+                reg(rm.reg32()) = doMultiplySigned(static_cast<int32_t>(tmp), imm, flags);
             }
             else
             {
                 uint16_t tmp;
-                if(!readRM16(modRM, tmp, addr))
+                if(!readRM16(rm, tmp))
                     break;
 
-                reg(static_cast<Reg16>(r)) = doMultiplySigned(static_cast<int16_t>(tmp), static_cast<int16_t>(imm), flags);
+                reg(rm.reg16()) = doMultiplySigned(static_cast<int16_t>(tmp), static_cast<int16_t>(imm), flags);
             }
 
             reg(Reg32::EIP) += 2;
@@ -1661,17 +1627,14 @@ void CPU::executeInstruction()
         case 0x80: // imm8 op
         case 0x82: // same thing
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            uint32_t immAddr;
+            auto rm = readModRM(addr + 1, immAddr);
+            if(!rm.isValid())
                 return;
 
-            auto exOp = (modRM >> 3) & 0x7;
-
             uint8_t dest;
-            if(!readRM8(modRM, dest, addr))
+            if(!readRM8(rm, dest))
                 break;
-
-            auto immAddr = getDispEnd(modRM, addr + 2);
 
             uint8_t imm;
             if(!readMemIP8(immAddr, imm))
@@ -1679,28 +1642,28 @@ void CPU::executeInstruction()
 
             reg(Reg32::EIP) += 2;
 
-            switch(exOp)
+            switch(rm.op())
             {
                 case 0: // ADD
-                    writeRM8(modRM, doAdd(dest, imm, flags), addr, true);
+                    writeRM8(rm, doAdd(dest, imm, flags));
                     break;
                 case 1: // OR
-                    writeRM8(modRM, doOr(dest, imm, flags), addr, true);
+                    writeRM8(rm, doOr(dest, imm, flags));
                     break;
                 case 2: // ADC
-                    writeRM8(modRM, doAddWithCarry(dest, imm, flags), addr, true);
+                    writeRM8(rm, doAddWithCarry(dest, imm, flags));
                     break;
                 case 3: // SBB
-                    writeRM8(modRM, doSubWithBorrow(dest, imm, flags), addr, true);
+                    writeRM8(rm, doSubWithBorrow(dest, imm, flags));
                     break;
                 case 4: // AND
-                    writeRM8(modRM, doAnd(dest, imm, flags), addr, true);
+                    writeRM8(rm, doAnd(dest, imm, flags));
                     break;
                 case 5: // SUB
-                    writeRM8(modRM, doSub(dest, imm, flags), addr, true);
+                    writeRM8(rm, doSub(dest, imm, flags));
                     break;
                 case 6: // XOR
-                    writeRM8(modRM, doXor(dest, imm, flags), addr, true);
+                    writeRM8(rm, doXor(dest, imm, flags));
                     break;
                 case 7: // CMP
                     doSub(dest, imm, flags);
@@ -1711,13 +1674,10 @@ void CPU::executeInstruction()
         }
         case 0x81: // imm16 op
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            uint32_t immAddr;
+            auto rm = readModRM(addr + 1, immAddr);
+            if(!rm.isValid())
                 return;
-
-            auto exOp = (modRM >> 3) & 0x7;
-
-            auto immAddr = getDispEnd(modRM, addr + 2);
 
             if(operandSize32)
             {
@@ -1726,33 +1686,33 @@ void CPU::executeInstruction()
                     return;
 
                 uint32_t dest;
-                if(!readRM32(modRM, dest, addr))
+                if(!readRM32(rm, dest))
                     break;
 
                 reg(Reg32::EIP) += 5;
 
-                switch(exOp)
+                switch(rm.op())
                 {
                     case 0: // ADD
-                        writeRM32(modRM, doAdd(dest, imm, flags), addr, true);
+                        writeRM32(rm, doAdd(dest, imm, flags));
                         break;
                     case 1: // OR
-                        writeRM32(modRM, doOr(dest, imm, flags), addr, true);
+                        writeRM32(rm, doOr(dest, imm, flags));
                         break;
                     case 2: // ADC
-                        writeRM32(modRM, doAddWithCarry(dest, imm, flags), addr, true);
+                        writeRM32(rm, doAddWithCarry(dest, imm, flags));
                         break;
                     case 3: // SBB
-                        writeRM32(modRM, doSubWithBorrow(dest, imm, flags), addr, true);
+                        writeRM32(rm, doSubWithBorrow(dest, imm, flags));
                         break;
                     case 4: // AND
-                        writeRM32(modRM, doAnd(dest, imm, flags), addr, true);
+                        writeRM32(rm, doAnd(dest, imm, flags));
                         break;
                     case 5: // SUB
-                        writeRM32(modRM, doSub(dest, imm, flags), addr, true);
+                        writeRM32(rm, doSub(dest, imm, flags));
                         break;
                     case 6: // XOR
-                        writeRM32(modRM, doXor(dest, imm, flags), addr, true);
+                        writeRM32(rm, doXor(dest, imm, flags));
                         break;
                     case 7: // CMP
                         doSub(dest, imm, flags);
@@ -1766,33 +1726,33 @@ void CPU::executeInstruction()
                     return;
 
                 uint16_t dest;
-                if(!readRM16(modRM, dest, addr))
+                if(!readRM16(rm, dest))
                     break;
 
                 reg(Reg32::EIP) += 3;
 
-                switch(exOp)
+                switch(rm.op())
                 {
                     case 0: // ADD
-                        writeRM16(modRM, doAdd(dest, imm, flags), addr, true);
+                        writeRM16(rm, doAdd(dest, imm, flags));
                         break;
                     case 1: // OR
-                        writeRM16(modRM, doOr(dest, imm, flags), addr, true);
+                        writeRM16(rm, doOr(dest, imm, flags));
                         break;
                     case 2: // ADC
-                        writeRM16(modRM, doAddWithCarry(dest, imm, flags), addr, true);
+                        writeRM16(rm, doAddWithCarry(dest, imm, flags));
                         break;
                     case 3: // SBB
-                        writeRM16(modRM, doSubWithBorrow(dest, imm, flags), addr, true);
+                        writeRM16(rm, doSubWithBorrow(dest, imm, flags));
                         break;
                     case 4: // AND
-                        writeRM16(modRM, doAnd(dest, imm, flags), addr, true);
+                        writeRM16(rm, doAnd(dest, imm, flags));
                         break;
                     case 5: // SUB
-                        writeRM16(modRM, doSub(dest, imm, flags), addr, true);
+                        writeRM16(rm, doSub(dest, imm, flags));
                         break;
                     case 6: // XOR
-                        writeRM16(modRM, doXor(dest, imm, flags), addr, true);
+                        writeRM16(rm, doXor(dest, imm, flags));
                         break;
                     case 7: // CMP
                         doSub(dest, imm, flags);
@@ -1804,20 +1764,17 @@ void CPU::executeInstruction()
 
         case 0x83: // signed imm8 op
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            uint32_t immAddr;
+            auto rm = readModRM(addr + 1, immAddr);
+            if(!rm.isValid())
                 return;
-
-            auto exOp = (modRM >> 3) & 0x7;
-
-            auto immAddr = getDispEnd(modRM, addr + 2);
 
             reg(Reg32::EIP) += 2;
 
             if(operandSize32)
             {
                 uint32_t dest;
-                if(!readRM32(modRM, dest, addr))
+                if(!readRM32(rm, dest))
                     break;
 
                 int32_t simm;
@@ -1827,28 +1784,28 @@ void CPU::executeInstruction()
 
                 uint32_t imm = simm;
 
-                switch(exOp)
+                switch(rm.op())
                 {
                     case 0: // ADD
-                        writeRM32(modRM, doAdd(dest, imm, flags), addr, true);
+                        writeRM32(rm, doAdd(dest, imm, flags));
                         break;
                     case 1: // OR
-                        writeRM32(modRM, doOr(dest, imm, flags), addr, true);
+                        writeRM32(rm, doOr(dest, imm, flags));
                         break;
                     case 2: // ADC
-                        writeRM32(modRM, doAddWithCarry(dest, imm, flags), addr, true);
+                        writeRM32(rm, doAddWithCarry(dest, imm, flags));
                         break;
                     case 3: // SBB
-                        writeRM32(modRM, doSubWithBorrow(dest, imm, flags), addr, true);
+                        writeRM32(rm, doSubWithBorrow(dest, imm, flags));
                         break;
                     case 4: // AND
-                        writeRM32(modRM, doAnd(dest, imm, flags), addr, true);
+                        writeRM32(rm, doAnd(dest, imm, flags));
                         break;
                     case 5: // SUB
-                        writeRM32(modRM, doSub(dest, imm, flags), addr, true);
+                        writeRM32(rm, doSub(dest, imm, flags));
                         break;
                     case 6: // XOR
-                        writeRM32(modRM, doXor(dest, imm, flags), addr, true);
+                        writeRM32(rm, doXor(dest, imm, flags));
                         break;
                     case 7: // CMP
                         doSub(dest, imm, flags);
@@ -1858,7 +1815,7 @@ void CPU::executeInstruction()
             else
             {
                 uint16_t dest;
-                if(!readRM16(modRM, dest, addr))
+                if(!readRM16(rm, dest))
                     break;
 
                 uint16_t imm;
@@ -1873,28 +1830,28 @@ void CPU::executeInstruction()
                 if(imm & 0x80)
                     imm |= 0xFF00;
 
-                switch(exOp)
+                switch(rm.op())
                 {
                     case 0: // ADD
-                        writeRM16(modRM, doAdd(dest, imm, flags), addr, true);
+                        writeRM16(rm, doAdd(dest, imm, flags));
                         break;
                     case 1: // OR
-                        writeRM16(modRM, doOr(dest, imm, flags), addr, true);
+                        writeRM16(rm, doOr(dest, imm, flags));
                         break;
                     case 2: // ADC
-                        writeRM16(modRM, doAddWithCarry(dest, imm, flags), addr, true);
+                        writeRM16(rm, doAddWithCarry(dest, imm, flags));
                         break;
                     case 3: // SBB
-                        writeRM16(modRM, doSubWithBorrow(dest, imm, flags), addr, true);
+                        writeRM16(rm, doSubWithBorrow(dest, imm, flags));
                         break;
                     case 4: // AND
-                        writeRM16(modRM, doAnd(dest, imm, flags), addr, true);
+                        writeRM16(rm, doAnd(dest, imm, flags));
                         break;
                     case 5: // SUB
-                        writeRM16(modRM, doSub(dest, imm, flags), addr, true);
+                        writeRM16(rm, doSub(dest, imm, flags));
                         break;
                     case 6: // XOR
-                        writeRM16(modRM, doXor(dest, imm, flags), addr, true);
+                        writeRM16(rm, doXor(dest, imm, flags));
                         break;
                     case 7: // CMP
                         doSub(dest, imm, flags);
@@ -1907,46 +1864,40 @@ void CPU::executeInstruction()
 
         case 0x84: // TEST r/m8 r8
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
 
-            auto r = (modRM >> 3) & 0x7;
-
-            auto src = reg(static_cast<Reg8>(r));
-
             uint8_t dest;
-            if(!readRM8(modRM, dest, addr))
+            if(!readRM8(rm, dest))
                 break;
 
-            doAnd(dest, src, flags);
+            doAnd(dest, reg(rm.reg8()), flags);
 
             reg(Reg32::EIP)++;
             break;
         }
         case 0x85: // TEST r/m16 r16
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
-
-            auto r = (modRM >> 3) & 0x7;
 
             if(operandSize32)
             {
-                auto src = reg(static_cast<Reg32>(r));
+                auto src = reg(rm.reg32());
 
                 uint32_t dest;
-                if(!readRM32(modRM, dest, addr))
+                if(!readRM32(rm, dest))
                     break;
                 doAnd(dest, src, flags);
             }
             else
             {
-                auto src = reg(static_cast<Reg16>(r));
+                auto src = reg(rm.reg16());
 
                 uint16_t dest;
-                if(!readRM16(modRM, dest, addr))
+                if(!readRM16(rm, dest))
                     break;
 
                 doAnd(dest, src, flags);
@@ -1958,16 +1909,14 @@ void CPU::executeInstruction()
 
         case 0x86: // XCHG r/m8 r8
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
 
-            auto r = (modRM >> 3) & 0x7;
-
-            auto srcReg = static_cast<Reg8>(r);
+            auto srcReg = rm.reg8();
 
             uint8_t tmp;
-            if(!readRM8(modRM, tmp, addr) || !writeRM8(modRM, reg(srcReg), addr, true))
+            if(!readRM8(rm, tmp) || !writeRM8(rm, reg(srcReg)))
                 break;
 
             reg(srcReg) = tmp;
@@ -1977,28 +1926,26 @@ void CPU::executeInstruction()
         }
         case 0x87: // XCHG r/m16 r16
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
-
-            auto r = (modRM >> 3) & 0x7;
 
             if(operandSize32)
             {
-                auto srcReg = static_cast<Reg32>(r);
+                auto srcReg = rm.reg32();
     
                 uint32_t tmp;
-                if(!readRM32(modRM, tmp, addr) || !writeRM32(modRM, reg(srcReg), addr, true))
+                if(!readRM32(rm, tmp) || !writeRM32(rm, reg(srcReg)))
                     break;
 
                 reg(srcReg) = tmp;
             }
             else
             {
-                auto srcReg = static_cast<Reg16>(r);
+                auto srcReg = rm.reg16();
 
                 uint16_t tmp;
-                if(!readRM16(modRM, tmp, addr) || !writeRM16(modRM, reg(srcReg), addr, true))
+                if(!readRM16(rm, tmp) || !writeRM16(rm, reg(srcReg)))
                     break;
 
                 reg(srcReg) = tmp;
@@ -2009,115 +1956,87 @@ void CPU::executeInstruction()
         }
         case 0x88: // MOV reg8 -> r/m
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
 
-            auto r = (modRM >> 3) & 0x7;
             reg(Reg32::EIP)++;
 
-            auto srcReg = static_cast<Reg8>(r);
-
-            writeRM8(modRM, reg(srcReg), addr);
+            writeRM8(rm, reg(rm.reg8()));
             break;
         }
         case 0x89: // MOV reg16 -> r/m
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
 
-            auto r = (modRM >> 3) & 0x7;
             reg(Reg32::EIP)++;
 
             if(operandSize32)
-            {
-                auto srcReg = static_cast<Reg32>(r);
-
-                writeRM32(modRM, reg(srcReg), addr);
-            }
+                writeRM32(rm, reg(rm.reg32()));
             else
-            {
-                auto srcReg = static_cast<Reg16>(r);
-
-                writeRM16(modRM, reg(srcReg), addr);
-            }
+                writeRM16(rm, reg(rm.reg16()));
 
             break;
         }
         case 0x8A: // MOV r/m -> reg8
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
 
             reg(Reg32::EIP)++;
 
-            auto r = (modRM >> 3) & 0x7;
-
-            auto destReg = static_cast<Reg8>(r);
-
-            readRM8(modRM, reg(destReg), addr);
-
+            readRM8(rm, reg(rm.reg8()));
             break;
         }
         case 0x8B: // MOV r/m -> reg16
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
 
             reg(Reg32::EIP)++;
 
-            auto r = (modRM >> 3) & 0x7;
-
             if(operandSize32)
-                readRM32(modRM, reg(static_cast<Reg32>(r)), addr);
+                readRM32(rm, reg(rm.reg32()));
             else
-                readRM16(modRM, reg(static_cast<Reg16>(r)), addr);
+                readRM16(rm, reg(rm.reg16()));
 
             break;
         }
         case 0x8C: // MOV sreg -> r/m
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
 
-            auto r = (modRM >> 3) & 0x7;
             reg(Reg32::EIP)++;
 
-            auto srcReg = static_cast<Reg16>(r + static_cast<int>(Reg16::ES));
+            auto srcReg = rm.segReg();
 
             // with 32bit operand size writing to mem still only writes 16 bits
             // writing to reg leaves high 16 bits undefined
             // ... but seabios relies on the newer behaviour of zeroing the high bits...
-            if(operandSize32 && (modRM >> 6) == 3)
-                reg(static_cast<Reg32>(modRM & 7)) = reg(srcReg);
+            if(operandSize32 && rm.isReg())
+                reg(rm.rmBase32()) = reg(srcReg);
             else
-                writeRM16(modRM, reg(srcReg), addr);
+                writeRM16(rm, reg(srcReg));
 
             break;
         }
 
         case 0x8D: // LEA
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
-                return;
-
-            auto r = (modRM >> 3) & 0x7;
-
-            // the only time we don't want the segment added...
-            auto [offset, segment] = getEffectiveAddress(modRM >> 6, modRM & 7, false, addr);
-
-            if(segment == Reg16::AX)
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
 
             if(operandSize32)
-                reg(static_cast<Reg32>(r)) = offset;
+                reg(rm.reg32()) = rm.offset;
             else
-                reg(static_cast<Reg16>(r)) = offset;
+                reg(rm.reg16()) = rm.offset;
 
             reg(Reg32::EIP)++;
             break;
@@ -2125,15 +2044,13 @@ void CPU::executeInstruction()
 
         case 0x8E: // MOV r/m -> sreg
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
 
             reg(Reg32::EIP)++;
 
-            auto r = (modRM >> 3) & 0x7;
-
-            auto destReg = static_cast<Reg16>(r + static_cast<int>(Reg16::ES));
+            auto destReg = rm.segReg();
 
             // loading CS is invalid
             if(destReg == Reg16::CS)
@@ -2143,7 +2060,7 @@ void CPU::executeInstruction()
             }
 
             uint16_t v;
-            if(readRM16(modRM, v, addr))
+            if(readRM16(rm, v))
                 setSegmentReg(destReg, v);
 
             break;
@@ -2151,22 +2068,37 @@ void CPU::executeInstruction()
 
         case 0x8F: // POP r/m
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
 
             reg(Reg32::EIP)++;
 
-            assert(((modRM >> 3) & 0x7) == 0);
+            assert(rm.op() == 0);
 
             uint32_t v;
             if(!pop(operandSize32, v))
                 break;
 
+            // annoying corner case, if SP is the base it should be the value after the pop
+            if(addressSize32)
+            {
+                uint8_t modRM, sib;
+                readMemIP8(addr + 1, modRM);
+
+                // SIB
+                if(modRM >> 6 != 3 && (modRM & 7) == 4)
+                {
+                    readMemIP8(addr + 2, sib);
+                    if((sib & 7) == 4) // SP as base
+                        rm.offset += operandSize32 ? 4 : 2;
+                }
+            }
+
             if(operandSize32)
-                writeRM32(modRM, v, addr);
+                writeRM32(rm, v);
             else
-                writeRM16(modRM, v, addr);
+                writeRM16(rm, v);
 
             break;
         }
@@ -2881,35 +2813,33 @@ void CPU::executeInstruction()
 
         case 0xC0: // shift r/m8 by imm
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            uint32_t immAddr;
+            auto rm = readModRM(addr + 1, immAddr);
+            if(!rm.isValid())
                 return;
 
-            auto exOp = (modRM >> 3) & 0x7;
-    
             uint8_t count;
-            if(!readMemIP8(getDispEnd(modRM, addr + 2), count))
+            if(!readMemIP8(immAddr, count))
                 return;
     
             reg(Reg32::EIP) += 2;
 
             uint8_t v;
-            if(!readRM8(modRM, v, addr))
+            if(!readRM8(rm, v))
                 break;
 
-            writeRM8(modRM, doShift(exOp, v, count, flags), addr, true);
+            writeRM8(rm, doShift(rm.op(), v, count, flags));
             break;
         }
         case 0xC1: // shift r/m16 by imm
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            uint32_t immAddr;
+            auto rm = readModRM(addr + 1, immAddr);
+            if(!rm.isValid())
                 return;
-
-            auto exOp = (modRM >> 3) & 0x7;
     
             uint8_t count;
-            if(!readMemIP8(getDispEnd(modRM, addr + 2), count))
+            if(!readMemIP8(immAddr, count))
                 return;
 
             reg(Reg32::EIP) += 2;
@@ -2917,18 +2847,18 @@ void CPU::executeInstruction()
             if(operandSize32)
             {
                 uint32_t v;
-                if(!readRM32(modRM, v, addr))
+                if(!readRM32(rm, v))
                     break;
 
-                writeRM32(modRM, doShift(exOp, v, count, flags), addr, true);
+                writeRM32(rm, doShift(rm.op(), v, count, flags));
             }
             else
             {
                 uint16_t v;
-                if(!readRM16(modRM, v, addr))
+                if(!readRM16(rm, v))
                     break;
 
-                writeRM16(modRM, doShift(exOp, v, count, flags), addr, true);
+                writeRM16(rm, doShift(rm.op(), v, count, flags));
             }
 
             break;
@@ -2976,13 +2906,12 @@ void CPU::executeInstruction()
 
         case 0xC6: // MOV imm8 -> r/m
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            uint32_t immAddr;
+            auto rm = readModRM(addr + 1, immAddr);
+            if(!rm.isValid())
                 return;
 
-            assert(((modRM >> 3) & 0x7) == 0);
-
-            auto immAddr = getDispEnd(modRM, addr + 2);
+            assert(rm.op() == 0);
 
             uint8_t imm;
             if(!readMemIP8(immAddr, imm))
@@ -2990,19 +2919,18 @@ void CPU::executeInstruction()
 
             reg(Reg32::EIP) += 2;
 
-            writeRM8(modRM, imm, addr);
+            writeRM8(rm, imm);
 
             break;
         }
         case 0xC7: // MOV imm16 -> r/m
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            uint32_t immAddr;
+            auto rm = readModRM(addr + 1, immAddr);
+            if(!rm.isValid())
                 return;
 
-            assert(((modRM >> 3) & 0x7) == 0);
-
-            auto immAddr = getDispEnd(modRM, addr + 2);
+            assert(rm.op() == 0);
 
             if(operandSize32)
             {
@@ -3011,7 +2939,7 @@ void CPU::executeInstruction()
                     return;
 
                 reg(Reg32::EIP) += 5;
-                writeRM32(modRM, imm, addr);
+                writeRM32(rm, imm);
             }
             else
             {
@@ -3020,7 +2948,7 @@ void CPU::executeInstruction()
                     return;
 
                 reg(Reg32::EIP) += 3;
-                writeRM16(modRM, imm, addr);
+                writeRM16(rm, imm);
             }
             break;
         }
@@ -3245,29 +3173,27 @@ void CPU::executeInstruction()
 
         case 0xD0: // shift r/m8 by 1
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
 
-            auto exOp = (modRM >> 3) & 0x7;
             reg(Reg32::EIP)++;
 
             auto count = 1;
 
             uint8_t v;
-            if(!readRM8(modRM, v, addr))
+            if(!readRM8(rm, v))
                 break;
 
-            writeRM8(modRM, doShift(exOp, v, count, flags), addr, true);
+            writeRM8(rm, doShift(rm.op(), v, count, flags));
             break;
         }
         case 0xD1: // shift r/m16 by 1
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
 
-            auto exOp = (modRM >> 3) & 0x7;
             reg(Reg32::EIP)++;
     
             auto count = 1;
@@ -3275,45 +3201,43 @@ void CPU::executeInstruction()
             if(operandSize32)
             {
                 uint32_t v;
-                if(!readRM32(modRM, v, addr))
+                if(!readRM32(rm, v))
                     break;
-                writeRM32(modRM, doShift(exOp, v, count, flags), addr, true);
+                writeRM32(rm, doShift(rm.op(), v, count, flags));
             }
             else
             {
                 uint16_t v;
-                if(!readRM16(modRM, v, addr))
+                if(!readRM16(rm, v))
                     break;
-                writeRM16(modRM, doShift(exOp, v, count, flags), addr, true);
+                writeRM16(rm, doShift(rm.op(), v, count, flags));
             }
 
             break;
         }
         case 0xD2: // shift r/m8 by cl
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
 
-            auto exOp = (modRM >> 3) & 0x7;
             reg(Reg32::EIP)++;
 
             auto count = reg(Reg8::CL);
 
             uint8_t v;
-            if(!readRM8(modRM, v, addr))
+            if(!readRM8(rm, v))
                 break;
 
-            writeRM8(modRM, doShift(exOp, v, count, flags), addr, true);
+            writeRM8(rm, doShift(rm.op(), v, count, flags));
             break;
         }
         case 0xD3: // shift r/m16 by cl
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
 
-            auto exOp = (modRM >> 3) & 0x7;
             reg(Reg32::EIP)++;
 
             auto count = reg(Reg8::CL);
@@ -3321,16 +3245,16 @@ void CPU::executeInstruction()
             if(operandSize32)
             {
                 uint32_t v;
-                if(!readRM32(modRM, v, addr))
+                if(!readRM32(rm, v))
                     break;
-                writeRM32(modRM, doShift(exOp, v, count, flags), addr, true);
+                writeRM32(rm, doShift(rm.op(), v, count, flags));
             }
             else
             {
                 uint16_t v;
-                if(!readRM16(modRM, v, addr))
+                if(!readRM16(rm, v))
                     break;
-                writeRM16(modRM, doShift(exOp, v, count, flags), addr, true);
+                writeRM16(rm, doShift(rm.op(), v, count, flags));
             }
 
             break;
@@ -3413,14 +3337,9 @@ void CPU::executeInstruction()
                 fault(Fault::NM);
             else
             {
-                uint8_t modRM;
-                if(!readMemIP8(addr + 1, modRM))
+                auto rm = readModRM(addr + 1);
+                if(!rm.isValid())
                     return;
-
-                // we need to at least decode it
-                uint8_t v;
-                if(!readRM8(modRM, v, addr))
-                    break;
 
                 reg(Reg32::EIP)++;
             }
@@ -3704,23 +3623,22 @@ void CPU::executeInstruction()
 
         case 0xF6: // group1 byte
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            uint32_t immAddr;
+            auto rm = readModRM(addr + 1, immAddr);
+            if(!rm.isValid())
                 return;
 
-            auto exOp = (modRM >> 3) & 0x7;
-
             uint8_t v;
-            if(!readRM8(modRM, v, addr)) // NOT/NEG write back...
+            if(!readRM8(rm, v))
                 break;
 
-            switch(exOp)
+            switch(rm.op())
             {
                 case 0: // TEST imm
                 case 1: // alias
                 {
                     uint8_t imm;
-                    if(!readMemIP8(getDispEnd(modRM, addr + 2), imm))
+                    if(!readMemIP8(immAddr, imm))
                         return;
 
                     doAnd(v, imm, flags);
@@ -3731,13 +3649,13 @@ void CPU::executeInstruction()
                 case 2: // NOT
                 {
                     reg(Reg32::EIP)++;
-                    writeRM8(modRM, ~v, addr, true);
+                    writeRM8(rm, ~v);
                     break;
                 }
                 case 3: // NEG
                 {
                     reg(Reg32::EIP)++;
-                    writeRM8(modRM, doSub(uint8_t(0), v, flags), addr, true);
+                    writeRM8(rm, doSub(uint8_t(0), v, flags));
                     break;
                 }
                 case 4: // MUL
@@ -3816,34 +3734,32 @@ void CPU::executeInstruction()
         }
         case 0xF7: // group1 word
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            uint32_t immAddr;
+            auto rm = readModRM(addr + 1, immAddr);
+            if(!rm.isValid())
                 return;
-
-            auto exOp = (modRM >> 3) & 0x7;
 
             uint32_t v;
 
             if(operandSize32)
             {
-                if(!readRM32(modRM, v, addr))
+                if(!readRM32(rm, v))
                     break;
             }
             else
             {
                 uint16_t tmp;
-                if(!readRM16(modRM, tmp, addr))
+                if(!readRM16(rm, tmp))
                     break;
 
                 v = tmp;
             }
 
-            switch(exOp)
+            switch(rm.op())
             {
                 case 0: // TEST imm
                 case 1: // alias
                 {
-                    auto immAddr = getDispEnd(modRM, addr + 2);
                     if(operandSize32)
                     {
                         uint32_t imm;
@@ -3872,9 +3788,9 @@ void CPU::executeInstruction()
                     reg(Reg32::EIP)++;
 
                     if(operandSize32)
-                        writeRM32(modRM, ~v, addr, true);
+                        writeRM32(rm, ~v);
                     else
-                        writeRM16(modRM, ~v, addr, true);
+                        writeRM16(rm, ~v);
 
                     break;
                 }
@@ -3883,9 +3799,9 @@ void CPU::executeInstruction()
                     reg(Reg32::EIP)++;
 
                     if(operandSize32)
-                        writeRM32(modRM, doSub(uint32_t(0), v, flags), addr, true);
+                        writeRM32(rm, doSub(uint32_t(0), v, flags));
                     else
-                        writeRM16(modRM, doSub(uint16_t(0), uint16_t(v), flags), addr, true);
+                        writeRM16(rm, doSub(uint16_t(0), uint16_t(v), flags));
 
                     break;
                 }
@@ -4090,24 +4006,22 @@ void CPU::executeInstruction()
 
         case 0xFE: // group2 byte
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
 
-            auto exOp = (modRM >> 3) & 0x7;
-
             uint8_t v;
-            if(!readRM8(modRM, v, addr))
+            if(!readRM8(rm, v))
                 break;
 
-            switch(exOp)
+            switch(rm.op())
             {
                 case 0: // INC
                 {
                     reg(Reg32::EIP)++;
 
                     auto res = doInc(v, flags);
-                    writeRM8(modRM, res, addr, true);
+                    writeRM8(rm, res);
                     break;
                 }
                 case 1: // DEC
@@ -4115,7 +4029,7 @@ void CPU::executeInstruction()
                     reg(Reg32::EIP)++;
 
                     auto res = doDec(v, flags);
-                    writeRM8(modRM, res, addr, true);
+                    writeRM8(rm, res);
                     break;
                 }
                 // 2-5 are CALL/JMP (only valid for 16 bit)
@@ -4128,31 +4042,27 @@ void CPU::executeInstruction()
         }
         case 0xFF: // group2 word
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 1, modRM))
+            auto rm = readModRM(addr + 1);
+            if(!rm.isValid())
                 return;
-
-            auto exOp = (modRM >> 3) & 0x7;
-
-            bool isReg = (modRM >> 6) == 3;
 
             uint32_t v;
 
             if(operandSize32)
             {
-                if(!readRM32(modRM, v, addr))
+                if(!readRM32(rm, v))
                     break;
             }
             else
             {
                 uint16_t tmp;
-                if(!readRM16(modRM, tmp, addr))
+                if(!readRM16(rm, tmp))
                     break;
 
                 v = tmp;
             }
 
-            switch(exOp)
+            switch(rm.op())
             {
                 case 0: // INC
                 {
@@ -4161,12 +4071,12 @@ void CPU::executeInstruction()
                     if(operandSize32)
                     {
                         auto res = doInc(v, flags);
-                        writeRM32(modRM, res, addr, true);
+                        writeRM32(rm, res);
                     }
                     else
                     {
                         auto res = doInc(uint16_t(v), flags);
-                        writeRM16(modRM, res, addr, true);
+                        writeRM16(rm, res);
                     }
                     break;
                 }
@@ -4177,12 +4087,12 @@ void CPU::executeInstruction()
                     if(operandSize32)
                     {
                         auto res = doDec(v, flags);
-                        writeRM32(modRM, res, addr, true);
+                        writeRM32(rm, res);
                     }
                     else
                     {
                         auto res = doDec(uint16_t(v), flags);
-                        writeRM16(modRM, res, addr, true);
+                        writeRM16(rm, res);
                     }
 
                     break;
@@ -4197,13 +4107,10 @@ void CPU::executeInstruction()
                 }
                 case 3: // CALL far indirect
                 {
-                    assert(!isReg);
-
-                    // need the addr again...
-                    auto [offset, segment] = getEffectiveAddress(modRM >> 6, modRM & 7, true, addr);
+                    assert(!rm.isReg());
 
                     uint16_t newCS;
-                    if(readMem16(offset + (operandSize32 ? 4 : 2), segment, newCS))
+                    if(readMem16(rm.offset + (operandSize32 ? 4 : 2), rm.rmBase, newCS))
                         farCall(newCS, v, reg(Reg32::EIP) + 1, operandSize32, stackAddrSize32);
                     break;
                 }
@@ -4214,12 +4121,10 @@ void CPU::executeInstruction()
                 }
                 case 5: // JMP far indirect
                 {
-                    assert(!isReg);
+                    assert(!rm.isReg());
 
-                    // need the addr again...
-                    auto [offset, segment] = getEffectiveAddress(modRM >> 6, modRM & 7, true, addr);
                     uint16_t newCS;
-                    readMem16(offset + (operandSize32 ? 4 : 2), segment, newCS);
+                    readMem16(rm.offset + (operandSize32 ? 4 : 2), rm.rmBase, newCS);
 
                     farJump(newCS, v, reg(Reg32::EIP) + 1);
                     break;
@@ -4279,13 +4184,11 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
     {
         case 0x00:
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 2, modRM))
+            auto rm = readModRM(addr + 2);
+            if(!rm.isValid())
                 return;
 
-            auto exOp = (modRM >> 3) & 0x7;
-
-            switch(exOp)
+            switch(rm.op())
             {
                 case 0x0: // SLDT
                 {
@@ -4300,7 +4203,7 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
 
                     // with 32bit operand size writing to mem only writes 16 bits
                     // writing to reg leaves high 16 bits undefined
-                    writeRM16(modRM, ldtSelector, addr);
+                    writeRM16(rm, ldtSelector);
                     break;
                 }
                 case 0x1: // STR
@@ -4316,10 +4219,10 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
 
                     // with 32bit operand size writing to mem only writes 16 bits
                     // writing to reg zeroes the high 16 bits
-                    if(operandSize32 && (modRM >> 6) == 3)
-                        reg(static_cast<Reg32>(modRM & 7)) = reg(Reg16::TR);
+                    if(operandSize32 && rm.isReg())
+                        reg(rm.rmBase32()) = reg(Reg16::TR);
                     else
-                        writeRM16(modRM, reg(Reg16::TR), addr);
+                        writeRM16(rm, reg(Reg16::TR));
 
                     break;
                 }
@@ -4334,7 +4237,7 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
 
                     uint16_t selector;
 
-                    if(readRM16(modRM, selector, addr + 1) && setLDT(selector))
+                    if(readRM16(rm, selector) && setLDT(selector))
                         reg(Reg32::EIP) += 2;
                     break;
                 }
@@ -4348,7 +4251,7 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
                     }
 
                     uint16_t selector;
-                    if(!readRM16(modRM, selector, addr + 1))
+                    if(!readRM16(rm, selector))
                         break;
 
                     // must be global
@@ -4399,7 +4302,7 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
                     }
 
                     uint16_t selector;
-                    if(!readRM16(modRM, selector, addr + 1))
+                    if(!readRM16(rm, selector))
                         break;
 
                     SegmentDescriptor desc;
@@ -4423,11 +4326,11 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
                             validDesc = false;
 
                         // code segments may not be readable, but data segments always are
-                        if(exOp == 0x4 && (desc.flags & SD_Executable) && !(desc.flags & SD_ReadWrite))
+                        if(rm.op() == 0x4 && (desc.flags & SD_Executable) && !(desc.flags & SD_ReadWrite))
                             validDesc = false;
 
                         // code segments aren't writable, data segments may be
-                        if(exOp == 0x5 && ((desc.flags & SD_Executable) || !(desc.flags & SD_ReadWrite)))
+                        if(rm.op() == 0x5 && ((desc.flags & SD_Executable) || !(desc.flags & SD_ReadWrite)))
                             validDesc = false;
                     }
 
@@ -4441,7 +4344,7 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
                 }
 
                 default:
-                    printf("op 0f 00 %02x @%05x\n", (int)exOp, addr);
+                    printf("op 0f 00 %02x @%05x\n", rm.op(), addr);
                     fault(Fault::UD);
                     break;
             }
@@ -4450,33 +4353,21 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
         }
         case 0x01:
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 2, modRM))
+            auto rm = readModRM(addr + 2);
+            if(!rm.isValid())
                 return;
 
-            auto exOp = (modRM >> 3) & 0x7;
-
-            switch(exOp)
+            switch(rm.op())
             {
                 case 0x0: // SGDT
                 {
-                    auto [offset, segment] = getEffectiveAddress(modRM >> 6, modRM & 7, false, addr + 1);
-
-                    if(segment == Reg16::AX)
-                        return;
-
-                    if(writeMem16(offset, segment, gdtLimit) && writeMem32(offset + 2, segment, gdtBase))
+                    if(writeMem16(rm.offset, rm.rmBase, gdtLimit) && writeMem32(rm.offset + 2, rm.rmBase, gdtBase))
                         reg(Reg32::EIP) += 2;
                     break;
                 }
                 case 0x1: // SIDT
                 {
-                    auto [offset, segment] = getEffectiveAddress(modRM >> 6, modRM & 7, false, addr + 1);
-
-                    if(segment == Reg16::AX)
-                        return;
-
-                    if(writeMem16(offset, segment, idtLimit) && writeMem32(offset + 2, segment, idtBase))
+                    if(writeMem16(rm.offset, rm.rmBase, idtLimit) && writeMem32(rm.offset + 2, rm.rmBase, idtBase))
                         reg(Reg32::EIP) += 2;
                     break;
                 }
@@ -4487,12 +4378,8 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
                         fault(Fault::GP, 0);
                         break;
                     }
-                    auto [offset, segment] = getEffectiveAddress(modRM >> 6, modRM & 7, false, addr + 1);
 
-                    if(segment == Reg16::AX)
-                        return;
-
-                    if(readMem16(offset, segment, gdtLimit) && readMem32(offset + 2, segment, gdtBase))
+                    if(readMem16(rm.offset, rm.rmBase, gdtLimit) && readMem32(rm.offset + 2, rm.rmBase, gdtBase))
                     {
                         if(!operandSize32)
                             gdtBase &= 0xFFFFFF;
@@ -4507,12 +4394,8 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
                         fault(Fault::GP, 0);
                         break;
                     }
-                    auto [offset, segment] = getEffectiveAddress(modRM >> 6, modRM & 7, false, addr + 1);
 
-                    if(segment == Reg16::AX)
-                        return;
-
-                    if(readMem16(offset, segment, idtLimit) && readMem32(offset + 2, segment, idtBase))
+                    if(readMem16(rm.offset, rm.rmBase, idtLimit) && readMem32(rm.offset + 2, rm.rmBase, idtBase))
                     {
                         if(!operandSize32)
                             idtBase &= 0xFFFFFF;
@@ -4525,7 +4408,7 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
                 case 0x4: // SMSW
                 {
                     reg(Reg32::EIP) += 2;
-                    writeRM16(modRM, reg(Reg32::CR0), addr + 1);
+                    writeRM16(rm, reg(Reg32::CR0));
                     break;
                 }
 
@@ -4538,7 +4421,7 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
                     }
 
                     uint16_t tmp;
-                    if(!readRM16(modRM, tmp, addr + 1))
+                    if(!readRM16(rm, tmp))
                         return;
 
                     reg(Reg32::CR0) = (reg(Reg32::CR0) & ~0x1E) | (tmp & 0x1F);
@@ -4547,7 +4430,7 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
                 }
 
                 default:
-                    printf("op 0f 01 %02x @%05x\n", (int)exOp, addr);
+                    printf("op 0f 01 %02x @%05x\n", rm.op(), addr);
                     fault(Fault::UD);
                     break;
             }
@@ -4564,14 +4447,12 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
                 break;
             }
 
-            uint8_t modRM;
-            if(!readMemIP8(addr + 2, modRM))
+            auto rm = readModRM(addr + 2);
+            if(!rm.isValid())
                 return;
 
-            auto r = (modRM >> 3) & 0x7;
-
             uint16_t selector;
-            if(!readRM16(modRM, selector, addr + 1))
+            if(!readRM16(rm, selector))
                 break;
 
             bool validDesc = false;
@@ -4621,9 +4502,9 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
                 auto access = (desc.flags & 0xFF0000) >> 8 | (desc.flags & 0xF000) << 8;
 
                 if(operandSize32)
-                    reg(static_cast<Reg32>(r)) = access;
+                    reg(rm.reg32()) = access;
                 else
-                    reg(static_cast<Reg16>(r)) = access;
+                    reg(rm.reg16()) = access;
             }
             else
                 flags &= ~Flag_Z;
@@ -4640,14 +4521,12 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
                 break;
             }
 
-            uint8_t modRM;
-            if(!readMemIP8(addr + 2, modRM))
+            auto rm = readModRM(addr + 2);
+            if(!rm.isValid())
                 return;
 
-            auto r = (modRM >> 3) & 0x7;
-
             uint16_t selector;
-            if(!readRM16(modRM, selector, addr + 1))
+            if(!readRM16(rm, selector))
                 break;
 
             bool validDesc = false;
@@ -4691,9 +4570,9 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
                 flags |= Flag_Z;
 
                 if(operandSize32)
-                    reg(static_cast<Reg32>(r)) = desc.limit;
+                    reg(rm.reg32()) = desc.limit;
                 else
-                    reg(static_cast<Reg16>(r)) = desc.limit;
+                    reg(rm.reg16()) = desc.limit;
             }
             else
                 flags &= ~Flag_Z;
@@ -4883,13 +4762,13 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
         case 0x9F: // SETNLE/SETG
         {
             int cond = opcode2 & 0xF;
-            uint8_t modRM;
-            if(!readMemIP8(addr + 2, modRM))
+            auto rm = readModRM(addr + 2);
+            if(!rm.isValid())
                 return;
 
             reg(Reg32::EIP) += 2;
 
-            writeRM8(modRM, getCondValue(cond, flags) ? 1 : 0, addr + 1);
+            writeRM8(rm, getCondValue(cond, flags) ? 1 : 0);
             break;
         }
 
@@ -4910,30 +4789,31 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
         }
         case 0xA3: // BT
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 2, modRM))
+            auto rm = readModRM(addr + 2);
+            if(!rm.isValid())
                 return;
 
-            auto r = (modRM >> 3) & 0x7;
             int32_t bit;
             bool value;
 
             if(operandSize32)
             {
-                bit = reg(static_cast<Reg32>(r));
+                bit = reg(rm.reg32());
+                rm.offset += (bit >> 5) * 4;
 
                 uint32_t data;
-                if(!readRM32(modRM, data, addr + 1, (bit >> 5) * 4))
+                if(!readRM32(rm, data))
                     break;
 
                 value = data & (1 << (bit & 31));
             }
             else
             {
-                bit = static_cast<int16_t>(reg(static_cast<Reg16>(r)));
+                bit = static_cast<int16_t>(reg(rm.reg16()));
+                rm.offset += (bit >> 4) * 2;
 
                 uint16_t data;
-                if(!readRM16(modRM, data, addr + 1, (bit >> 4) * 2))
+                if(!readRM16(rm, data))
                     break;
 
                 value = data & (1 << (bit & 15));
@@ -4950,14 +4830,13 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
 
         case 0xA4: // SHLD by imm
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 2, modRM))
+            uint32_t immAddr;
+            auto rm = readModRM(addr + 2, immAddr);
+            if(!rm.isValid())
                 return;
 
-            auto r = (modRM >> 3) & 0x7;
-        
             uint8_t count;
-            if(!readMemIP8(getRMDispEnd(modRM, addr + 3, addressSize32), count))
+            if(!readMemIP8(immAddr, count))
                 return;
 
             count &= 0x1F;
@@ -4966,32 +4845,31 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
             if(operandSize32)
             {
                 uint32_t v;
-                if(!readRM32(modRM, v, addr + 1))
+                if(!readRM32(rm, v))
                     break;
 
-                auto src = reg(static_cast<Reg32>(r));
-                writeRM32(modRM, doDoubleShiftLeft(v, src, count, flags), addr + 1, true);
+                auto src = reg(rm.reg32());
+                writeRM32(rm, doDoubleShiftLeft(v, src, count, flags));
             }
             else
             {
                 uint16_t v;
 
-                if(!readRM16(modRM, v, addr + 1))
+                if(!readRM16(rm, v))
                     break;
 
-                auto src = reg(static_cast<Reg16>(r));
-                writeRM16(modRM, doDoubleShiftLeft(v, src, count, flags), addr + 1, true);
+                auto src = reg(rm.reg16());
+                writeRM16(rm, doDoubleShiftLeft(v, src, count, flags));
             }
 
             break;
         }
         case 0xA5: // SHLD by CL
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 2, modRM))
+            auto rm = readModRM(addr + 2);
+            if(!rm.isValid())
                 return;
 
-            auto r = (modRM >> 3) & 0x7;
             reg(Reg32::EIP) += 2;
 
             auto count = reg(Reg8::CL) & 0x1F;
@@ -4999,20 +4877,20 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
             if(operandSize32)
             {
                 uint32_t v;
-                if(!readRM32(modRM, v, addr + 1))
+                if(!readRM32(rm, v))
                     break;
 
-                auto src = reg(static_cast<Reg32>(r));
-                writeRM32(modRM, doDoubleShiftLeft(v, src, count, flags), addr + 1, true);
+                auto src = reg(rm.reg32());
+                writeRM32(rm, doDoubleShiftLeft(v, src, count, flags));
             }
             else
             {
                 uint16_t v;
-                if(!readRM16(modRM, v, addr + 1))
+                if(!readRM16(rm, v))
                     break;
 
-                auto src = reg(static_cast<Reg16>(r));
-                writeRM16(modRM, doDoubleShiftLeft(v, src, count, flags), addr + 1, true);
+                auto src = reg(rm.reg16());
+                writeRM16(rm, doDoubleShiftLeft(v, src, count, flags));
             }
 
             break;
@@ -5036,42 +4914,41 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
 
         case 0xAB: // BTS
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 2, modRM))
+            auto rm = readModRM(addr + 2);
+            if(!rm.isValid())
                 return;
 
-            auto r = (modRM >> 3) & 0x7;
             int32_t bit;
             bool value;
 
             if(operandSize32)
             {
-                bit = reg(static_cast<Reg32>(r));
+                bit = reg(rm.reg32());
 
-                int off = (bit >> 5) * 4;
+                rm.offset += (bit >> 5) * 4;
                 bit &= 31;
 
                 uint32_t data;
-                if(!readRM32(modRM, data, addr + 1, off))
+                if(!readRM32(rm, data))
                     break;
 
                 value = data & (1 << bit);
-                if(!writeRM32(modRM, data | 1 << bit, addr + 1, true, off))
+                if(!writeRM32(rm, data | 1 << bit))
                     break;
             }
             else
             {
-                bit = static_cast<int16_t>(reg(static_cast<Reg16>(r)));
+                bit = static_cast<int16_t>(reg(rm.reg16()));
 
-                int off = (bit >> 4) * 2;
+                rm.offset += (bit >> 4) * 2;
                 bit &= 15;
 
                 uint16_t data;
-                if(!readRM16(modRM, data, addr + 1, off))
+                if(!readRM16(rm, data))
                     break;
 
                 value = data & (1 << bit);
-                if(!writeRM16(modRM, data | 1 << bit, addr + 1, true, off))
+                if(!writeRM16(rm, data | 1 << bit))
                     break;
             }
 
@@ -5086,14 +4963,13 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
 
         case 0xAC: // SHRD by imm
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 2, modRM))
+            uint32_t immAddr;
+            auto rm = readModRM(addr + 2, immAddr);
+            if(!rm.isValid())
                 return;
 
-            auto r = (modRM >> 3) & 0x7;
-
             uint8_t count;
-            if(!readMemIP8(getRMDispEnd(modRM, addr + 3, addressSize32), count))
+            if(!readMemIP8(immAddr, count))
                 return;
 
             count &= 0x1F;
@@ -5102,31 +4978,30 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
             if(operandSize32)
             {
                 uint32_t v;
-                if(!readRM32(modRM, v, addr + 1))
+                if(!readRM32(rm, v))
                     break;
 
-                auto src = reg(static_cast<Reg32>(r));
-                writeRM32(modRM, doDoubleShiftRight(v, src, count, flags), addr + 1, true);
+                auto src = reg(rm.reg32());
+                writeRM32(rm, doDoubleShiftRight(v, src, count, flags));
             }
             else
             {
                 uint16_t v;
-                if(!readRM16(modRM, v, addr + 1))
+                if(!readRM16(rm, v))
                     break;
 
-                auto src = reg(static_cast<Reg16>(r));
-                writeRM16(modRM, doDoubleShiftRight(v, src, count, flags), addr + 1, true);
+                auto src = reg(rm.reg16());
+                writeRM16(rm, doDoubleShiftRight(v, src, count, flags));
             }
 
             break;
         }
         case 0xAD: // SHRD by CL
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 2, modRM))
+            auto rm = readModRM(addr + 2);
+            if(!rm.isValid())
                 return;
 
-            auto r = (modRM >> 3) & 0x7;
             reg(Reg32::EIP) += 2;
 
             auto count = reg(Reg8::CL) & 0x1F;
@@ -5134,20 +5009,20 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
             if(operandSize32)
             {
                 uint32_t v;
-                if(!readRM32(modRM, v, addr + 1))
+                if(!readRM32(rm, v))
                     break;
 
-                auto src = reg(static_cast<Reg32>(r));
-                writeRM32(modRM, doDoubleShiftRight(v, src, count, flags), addr + 1, true);
+                auto src = reg(rm.reg32());
+                writeRM32(rm, doDoubleShiftRight(v, src, count, flags));
             }
             else
             {
                 uint16_t v;
-                if(!readRM16(modRM, v, addr + 1))
+                if(!readRM16(rm, v))
                     break;
 
-                auto src = reg(static_cast<Reg16>(r));
-                writeRM16(modRM, doDoubleShiftRight(v, src, count, flags), addr + 1, true);
+                auto src = reg(rm.reg16());
+                writeRM16(rm, doDoubleShiftRight(v, src, count, flags));
             }
 
             break;
@@ -5155,29 +5030,27 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
 
         case 0xAF: // IMUL r, r/m
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 2, modRM))
+            auto rm = readModRM(addr + 2);
+            if(!rm.isValid())
                 return;
-
-            auto r = (modRM >> 3) & 0x7;
 
             if(operandSize32)
             {
                 uint32_t tmp;
-                if(!readRM32(modRM, tmp, addr + 1))
+                if(!readRM32(rm, tmp))
                     break;
 
-                auto regVal = static_cast<int32_t>(reg(static_cast<Reg32>(r)));
-                reg(static_cast<Reg32>(r)) = doMultiplySigned(regVal, static_cast<int32_t>(tmp), flags);
+                auto regVal = static_cast<int32_t>(reg(rm.reg32()));
+                reg(rm.reg32()) = doMultiplySigned(regVal, static_cast<int32_t>(tmp), flags);
             }
             else
             {
                 uint16_t tmp;
-                if(!readRM16(modRM, tmp, addr + 1))
+                if(!readRM16(rm, tmp))
                     break;
 
-                auto regVal = static_cast<int16_t>(reg(static_cast<Reg16>(r)));
-                reg(static_cast<Reg16>(r)) = doMultiplySigned(regVal, static_cast<int16_t>(tmp), flags);
+                auto regVal = static_cast<int16_t>(reg(rm.reg16()));
+                reg(rm.reg16()) = doMultiplySigned(regVal, static_cast<int16_t>(tmp), flags);
             }
 
             reg(Reg32::EIP) += 2;
@@ -5191,42 +5064,41 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
 
         case 0xB3: // BTR
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 2, modRM))
+            auto rm = readModRM(addr + 2);
+            if(!rm.isValid())
                 return;
 
-            auto r = (modRM >> 3) & 0x7;
             int32_t bit;
             bool value;
 
             if(operandSize32)
             {
-                bit = reg(static_cast<Reg32>(r));
+                bit = reg(rm.reg32());
 
-                int off = (bit >> 5) * 4;
+                rm.offset += (bit >> 5) * 4;
                 bit &= 31;
 
                 uint32_t data;
-                if(!readRM32(modRM, data, addr + 1, off))
+                if(!readRM32(rm, data))
                     break;
 
                 value = data & (1 << bit);
-                if(!writeRM32(modRM, data & ~(1 << bit), addr + 1, true, off))
+                if(!writeRM32(rm, data & ~(1 << bit)))
                     break;
             }
             else
             {
-                bit = static_cast<int16_t>(reg(static_cast<Reg16>(r)));
+                bit = static_cast<int16_t>(reg(rm.reg16()));
 
-                int off = (bit >> 4) * 2;
+                rm.offset += (bit >> 4) * 2;
                 bit &= 15;
 
                 uint16_t data;
-                if(!readRM16(modRM, data, addr + 1, off))
+                if(!readRM16(rm, data))
                     break;
 
                 value = data & (1 << bit);
-                if(!writeRM16(modRM, data & ~(1 << bit), addr + 1, true, off))
+                if(!writeRM16(rm, data & ~(1 << bit)))
                     break;
             }
 
@@ -5250,40 +5122,36 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
 
         case 0xB6: // MOVZX 8 -> 16/32
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 2, modRM))
+            auto rm = readModRM(addr + 2);
+            if(!rm.isValid())
                 return;
 
-            auto r = (modRM >> 3) & 0x7;
-
             uint8_t v;
-            if(!readRM8(modRM, v, addr + 1))
+            if(!readRM8(rm, v))
                 break;
 
             if(operandSize32)
-                reg(static_cast<Reg32>(r)) = v;
+                reg(rm.reg32()) = v;
             else
-                reg(static_cast<Reg16>(r)) = v;
+                reg(rm.reg16()) = v;
 
             reg(Reg32::EIP) += 2;
             break;
         }
         case 0xB7: // MOVZX 16 -> 16/32
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 2, modRM))
+            auto rm = readModRM(addr + 2);
+            if(!rm.isValid())
                 return;
 
-            auto r = (modRM >> 3) & 0x7;
-
             uint16_t v;
-            if(!readRM16(modRM, v, addr + 1))
+            if(!readRM16(rm, v))
                 break;
 
             if(operandSize32)
-                reg(static_cast<Reg32>(r)) = v;
+                reg(rm.reg32()) = v;
             else
-                reg(static_cast<Reg16>(r)) = v;
+                reg(rm.reg16()) = v;
 
             reg(Reg32::EIP) += 2;
             break;
@@ -5291,17 +5159,16 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
 
         case 0xBA:
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 2, modRM))
+            uint32_t immAddr;
+            auto rm = readModRM(addr + 2, immAddr);
+            if(!rm.isValid())
                 return;
 
             uint8_t bit;
-            if(!readMemIP8(getRMDispEnd(modRM, addr + 3, addressSize32), bit))
+            if(!readMemIP8(immAddr, bit))
                 return;
 
             reg(Reg32::EIP) += 3;
-
-            auto exOp = (modRM >> 3) & 0x7;
 
             uint32_t data;
             bool value;
@@ -5310,7 +5177,7 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
             {
                 bit &= 31;
 
-                if(!readRM32(modRM, data, addr + 1))
+                if(!readRM32(rm, data))
                     break;
 
                 value = data & (1 << bit);
@@ -5320,41 +5187,41 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
                 bit &= 15;
 
                 uint16_t data16;
-                if(!readRM16(modRM, data16, addr + 1))
+                if(!readRM16(rm, data16))
                     break;
 
                 value = data16 & (1 << bit);
                 data = data16;
             }
 
-            switch(exOp)
+            switch(rm.op())
             {
                 case 4: // BT
                     break; // nothing else to do
                 case 5: // BTS
                 {
                     if(operandSize32)
-                        writeRM32(modRM, data | 1 << bit, addr + 1, true);
+                        writeRM32(rm, data | 1 << bit);
                     else
-                        writeRM16(modRM, data | 1 << bit, addr + 1, true);
+                        writeRM16(rm, data | 1 << bit);
 
                     break;
                 }
                 case 6: // BTR
                 {
                     if(operandSize32)
-                        writeRM32(modRM, data & ~(1 << bit), addr + 1, true);
+                        writeRM32(rm, data & ~(1 << bit));
                     else
-                        writeRM16(modRM, data & ~(1 << bit), addr + 1, true);
+                        writeRM16(rm, data & ~(1 << bit));
 
                     break;
                 }
                 case 7: // BTC
                 {
                     if(operandSize32)
-                        writeRM32(modRM, data ^ (1 << bit), addr + 1, true);
+                        writeRM32(rm, data ^ (1 << bit));
                     else
-                        writeRM16(modRM, data ^ (1 << bit), addr + 1, true);
+                        writeRM16(rm, data ^ (1 << bit));
 
                     break;
                 }
@@ -5373,42 +5240,41 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
 
         case 0xBB: // BTC
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 2, modRM))
+            auto rm = readModRM(addr + 2);
+            if(!rm.isValid())
                 return;
 
-            auto r = (modRM >> 3) & 0x7;
             int32_t bit;
             bool value;
 
             if(operandSize32)
             {
-                bit = reg(static_cast<Reg32>(r));
+                bit = reg(rm.reg32());
 
-                int off = (bit >> 5) * 4;
+                rm.offset += (bit >> 5) * 4;
                 bit &= 31;
 
                 uint32_t data;
-                if(!readRM32(modRM, data, addr + 1, off))
+                if(!readRM32(rm, data))
                     break;
 
                 value = data & (1 << bit);
-                if(!writeRM32(modRM, data ^ 1 << bit, addr + 1, true, off))
+                if(!writeRM32(rm, data ^ 1 << bit))
                     break;
             }
             else
             {
-                bit = static_cast<int16_t>(reg(static_cast<Reg16>(r)));
+                bit = static_cast<int16_t>(reg(rm.reg16()));
 
-                int off = (bit >> 4) * 2;
+                rm.offset += (bit >> 4) * 2;
                 bit &= 15;
 
                 uint16_t data;
-                if(!readRM16(modRM, data, addr + 1, off))
+                if(!readRM16(rm, data))
                     break;
 
                 value = data & (1 << bit);
-                if(!writeRM16(modRM, data ^ 1 << bit, addr + 1, true, off))
+                if(!writeRM16(rm, data ^ 1 << bit))
                     break;
             }
 
@@ -5423,23 +5289,21 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
 
         case 0xBC: // BSF
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 2, modRM))
+            auto rm = readModRM(addr + 2);
+            if(!rm.isValid())
                 return;
-
-            auto r = (modRM >> 3) & 0x7;
 
             uint32_t val;
 
             if(operandSize32)
             {
-                if(!readRM32(modRM, val, addr + 1))
+                if(!readRM32(rm, val))
                     break;
             }
             else
             {
                 uint16_t tmp;
-                if(!readRM16(modRM, tmp, addr + 1))
+                if(!readRM16(rm, tmp))
                     break;
 
                 val = tmp;
@@ -5453,9 +5317,9 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
 
                 int bit = __builtin_ctz(val);
                 if(operandSize32)
-                    reg(static_cast<Reg32>(r)) = bit;
+                    reg(rm.reg32()) = bit;
                 else
-                    reg(static_cast<Reg16>(r)) = bit;
+                    reg(rm.reg16()) = bit;
             }
 
             reg(Reg32::EIP) += 2;
@@ -5463,23 +5327,21 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
         }
         case 0xBD: // BSR
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 2, modRM))
+            auto rm = readModRM(addr + 2);
+            if(!rm.isValid())
                 return;
-
-            auto r = (modRM >> 3) & 0x7;
 
             uint32_t val;
 
             if(operandSize32)
             {
-                if(!readRM32(modRM, val, addr + 1))
+                if(!readRM32(rm, val))
                     break;
             }
             else
             {
                 uint16_t tmp;
-                if(!readRM16(modRM, tmp, addr + 1))
+                if(!readRM16(rm, tmp))
                     break;
 
                 val = tmp;
@@ -5492,9 +5354,9 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
 
                 int bit = 31 - __builtin_clz(val);
                 if(operandSize32)
-                    reg(static_cast<Reg32>(r)) = bit;
+                    reg(rm.reg32()) = bit;
                 else
-                    reg(static_cast<Reg16>(r)) = bit;
+                    reg(rm.reg16()) = bit;
             }
 
             reg(Reg32::EIP) += 2;
@@ -5503,15 +5365,13 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
 
         case 0xBE: // MOVSX 8 -> 16/32
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 2, modRM))
+            auto rm = readModRM(addr + 2);
+            if(!rm.isValid())
                 return;
-
-            auto r = (modRM >> 3) & 0x7;
 
             uint32_t v;
             uint8_t v8;
-            if(!readRM8(modRM, v8, addr + 1))
+            if(!readRM8(rm, v8))
                 break;
 
             // sign extend
@@ -5521,24 +5381,22 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
                 v = v8;
 
             if(operandSize32)
-                reg(static_cast<Reg32>(r)) = v;
+                reg(rm.reg32()) = v;
             else
-                reg(static_cast<Reg16>(r)) = v;
+                reg(rm.reg16()) = v;
 
             reg(Reg32::EIP) += 2;
             break;
         }
         case 0xBF: // MOVSX 16 -> 16/32
         {
-            uint8_t modRM;
-            if(!readMemIP8(addr + 2, modRM))
+            auto rm = readModRM(addr + 2);
+            if(!rm.isValid())
                 return;
-
-            auto r = (modRM >> 3) & 0x7;
 
             uint32_t v;
             uint16_t v16;
-            if(!readRM16(modRM, v16, addr + 1))
+            if(!readRM16(rm, v16))
                 break;
 
             // sign extend
@@ -5548,9 +5406,9 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
                 v = v16;
 
             if(operandSize32)
-                reg(static_cast<Reg32>(r)) = v;
+                reg(rm.reg32()) = v;
             else
-                reg(static_cast<Reg16>(r)) = v;
+                reg(rm.reg16()) = v;
 
             reg(Reg32::EIP) += 2;
             break;
@@ -5981,12 +5839,13 @@ bool CPU::lookupPageTable(uint32_t virtAddr, uint32_t &physAddr, bool forWrite, 
     return true;
 }
 
-// rw is true if this is a write that was read in the same op (to avoid counting disp twice)
 // returns {0, AX(0)} if there was a fault fetching a disp (or SIB)
-std::tuple<uint32_t, CPU::Reg16> CPU::getEffectiveAddress(int mod, int rm, bool rw, uint32_t addr)
+std::tuple<uint32_t, CPU::Reg16> CPU::getEffectiveAddress(int mod, int rm, uint32_t &addr)
 {
     uint32_t memAddr = 0;
     Reg16 segBase = Reg16::DS;
+
+    addr++; // the R/M
 
     if(addressSize32) // r/m meaning is entirely different in 32bit mode
     {
@@ -6005,13 +5864,10 @@ std::tuple<uint32_t, CPU::Reg16> CPU::getEffectiveAddress(int mod, int rm, bool 
             case 4: // SIB
             {
                 uint8_t sib;
-                if(!readMemIP8(addr + 2, sib))
+                if(!readMemIP8(addr++, sib))
                     return {0, Reg16::AX};
 
-                addr++; // everything is now offset by a byte
-
-                if(!rw)
-                    reg(Reg32::EIP)++;
+                reg(Reg32::EIP)++;
 
                 int scale = sib >> 6;
                 int index = (sib >> 3) & 7;
@@ -6020,11 +5876,11 @@ std::tuple<uint32_t, CPU::Reg16> CPU::getEffectiveAddress(int mod, int rm, bool 
                 if(mod == 0 && base == Reg32::EBP)
                 {
                     // disp32 instead of base
-                    if(!readMemIP32(addr + 2, memAddr))
+                    if(!readMemIP32(addr, memAddr))
                         return {0, Reg16::AX};
 
-                    if(!rw)
-                        reg(Reg32::EIP) += 4;
+                    reg(Reg32::EIP) += 4;
+                    addr += 4;
                 }
                 else
                 {
@@ -6044,11 +5900,11 @@ std::tuple<uint32_t, CPU::Reg16> CPU::getEffectiveAddress(int mod, int rm, bool 
             case 5: // ~the same as 6 for 16-bit
                 if(mod == 0) // direct
                 {
-                    if(!readMemIP32(addr + 2, memAddr))
+                    if(!readMemIP32(addr, memAddr))
                         return {0, Reg16::AX};
 
-                    if(!rw)
-                        reg(Reg32::EIP) += 4;
+                    reg(Reg32::EIP) += 4;
+                    addr += 4;
                 }
                 else
                 {
@@ -6086,11 +5942,11 @@ std::tuple<uint32_t, CPU::Reg16> CPU::getEffectiveAddress(int mod, int rm, bool 
             case 6:
                 if(mod == 0) // direct
                 {
-                    if(!readMemIP16(addr + 2, memAddr))
+                    if(!readMemIP16(addr, memAddr))
                         return {0, Reg16::AX};
 
-                    if(!rw)
-                        reg(Reg32::EIP) += 2;
+                    reg(Reg32::EIP) += 2;
+                    addr += 2;
                 }
                 else
                 {
@@ -6109,11 +5965,10 @@ std::tuple<uint32_t, CPU::Reg16> CPU::getEffectiveAddress(int mod, int rm, bool 
     if(mod == 1)
     {
         int32_t disp;
-        if(!readMemIP8(addr + 2, disp))
+        if(!readMemIP8(addr++, disp))
             return {0, Reg16::AX};
 
-        if(!rw)
-            reg(Reg32::EIP)++;
+        reg(Reg32::EIP)++;
 
         memAddr += disp;
     }
@@ -6122,22 +5977,22 @@ std::tuple<uint32_t, CPU::Reg16> CPU::getEffectiveAddress(int mod, int rm, bool 
         if(addressSize32) // 32bit
         {
             uint32_t disp;
-            if(!readMemIP32(addr + 2, disp))
+            if(!readMemIP32(addr, disp))
                 return {0, Reg16::AX};
 
-            if(!rw)
-                reg(Reg32::EIP) += 4;
+            reg(Reg32::EIP) += 4;
+            addr += 4;
 
             memAddr += disp;
         }
         else //16bit
         {
             uint16_t disp;
-            if(!readMemIP16(addr + 2, disp))
+            if(!readMemIP16(addr, disp))
                 return {0, Reg16::AX};
 
-            if(!rw)
-                reg(Reg32::EIP) += 2;
+            reg(Reg32::EIP) += 2;
+            addr += 2;
 
             memAddr += disp;
         }
@@ -6153,51 +6008,32 @@ std::tuple<uint32_t, CPU::Reg16> CPU::getEffectiveAddress(int mod, int rm, bool 
     return {memAddr, segBase};
 }
 
-uint32_t CPU::getRMDispEnd(uint8_t modRM, uint32_t nextAddr, bool addressSize32)
+// reads ModR/M, SIB and displacement, returns reg/offset and address of the next byte after the disp
+// addr is the linear address of the ModR/M byte
+CPU::RM CPU::readModRM(uint32_t addr, uint32_t &endAddr)
 {
+    uint8_t modRM;
+    if(!readMemIP8(addr, modRM))
+        return {Reg16::AX, Reg16::IP, 0}; // the invalid value
+
     auto mod = modRM >> 6;
+    auto r = static_cast<Reg16>((modRM >> 3) & 7);
     auto rm = modRM & 7;
 
-    if(mod == 3)
-        return nextAddr;
-
-    if(addressSize32)
+    if(mod != 3)
     {
-        uint32_t ret = nextAddr;
+        auto [offset, segment] = getEffectiveAddress(mod, rm, addr);
+        if(segment == Reg16::AX) // fault while reading disp
+            return {Reg16::AX, Reg16::IP, 0};
 
-        if(rm == 4) // SIB
-            ret++;
-
-        if(mod == 0)
-        {
-            if(rm == 5)
-                return ret + 4;
-
-            // disp instead of base
-            if(rm == 4)
-            {
-                uint8_t sib;
-                [[maybe_unused]] bool ok = readMemIP8(nextAddr, sib);
-                assert(ok); // FIXME: make sure callers try to access the RM first so this can't happen
-
-                if((sib & 7) == 5)
-                    ret += 4;
-            }
-        
-            return ret;
-        }
-
-        if(mod == 1)
-            return ret + 1;
-        if(mod == 2)
-            return ret + 4;
+        endAddr = addr;
+        return {r, segment, offset};
     }
-    // else 16 bit
-
-    if(mod == 0)
-        return nextAddr + (rm == 6 ? 2 : 0);
-
-    return nextAddr + mod; // mod 1 == 8bit, mod 2 == 16bit
+    else
+    {
+        endAddr = addr + 1;
+        return {r, static_cast<Reg16>(rm), 0};
+    }
 }
 
 CPU::SegmentDescriptor CPU::loadSegmentDescriptor(uint16_t selector)
@@ -6744,210 +6580,162 @@ bool CPU::isOperandSize32(bool override)
     return codeSizeBit != override;
 }
 
-bool CPU::readRM8(uint8_t modRM, uint8_t &v, uint32_t addr, int additionalOffset)
+bool CPU::readRM8(const RM &rm, uint8_t &v)
 {
-    auto mod = modRM >> 6;
-    auto rm = modRM & 7;
-
-    if(mod != 3)
+    if(rm.isReg())
     {
-        auto [offset, segment] = getEffectiveAddress(mod, rm, false, addr);
-        if(segment == Reg16::AX) // fault while reading disp
-            return false;
-        return readMem8(offset + additionalOffset, segment, v);
-    }
-    else
-    {
-        v = reg(static_cast<Reg8>(rm));
+        v = reg(rm.rmBase8());
         return true;
     }
+    else
+        return readMem8(rm.offset, rm.rmBase, v);
 }
 
-bool CPU::readRM16(uint8_t modRM, uint16_t &v, uint32_t addr, int additionalOffset)
+bool CPU::readRM16(const RM &rm, uint16_t &v)
 {
-    auto mod = modRM >> 6;
-    auto rm = modRM & 7;
-
-    if(mod != 3)
+    if(rm.isReg())
     {
-        auto [offset, segment] = getEffectiveAddress(mod, rm, false, addr);
-        if(segment == Reg16::AX)
-            return false;
-        return readMem16(offset + additionalOffset, segment, v);
-    }
-    else
-    {
-        v = reg(static_cast<Reg16>(rm));
+        v = reg(rm.rmBase16());
         return true;
     }
+    else
+        return readMem16(rm.offset, rm.rmBase, v);
 }
 
-bool CPU::readRM32(uint8_t modRM, uint32_t &v, uint32_t addr, int additionalOffset)
+bool CPU::readRM32(const RM &rm, uint32_t &v)
 {
-    auto mod = modRM >> 6;
-    auto rm = modRM & 7;
-
-    if(mod != 3)
+    if(rm.isReg())
     {
-        auto [offset, segment] = getEffectiveAddress(mod, rm, false, addr);
-        if(segment == Reg16::AX)
-            return false;
-        return readMem32(offset + additionalOffset, segment, v);
-    }
-    else
-    {
-        v = reg(static_cast<Reg32>(rm));
+        v = reg(rm.rmBase32());
         return true;
     }
+    else
+        return readMem32(rm.offset, rm.rmBase, v);
 }
 
-bool CPU::writeRM8(uint8_t modRM, uint8_t v, uint32_t addr, bool rw, int additionalOffset)
+bool CPU::writeRM8(const RM &rm, uint8_t v)
 {
-    auto mod = modRM >> 6;
-    auto rm = modRM & 7;
-
-    if(mod != 3)
+    if(rm.isReg())
     {
-        auto [offset, segment] = getEffectiveAddress(mod, rm, rw, addr);
-        if(segment == Reg16::AX)
-            return false;
-        return writeMem8(offset + additionalOffset, segment, v);
+        reg(rm.rmBase8()) = v;
+        return true;
     }
     else
-        reg(static_cast<Reg8>(rm)) = v;
-
-    return true;
+        return writeMem8(rm.offset, rm.rmBase, v);
 }
 
-bool CPU::writeRM16(uint8_t modRM, uint16_t v, uint32_t addr, bool rw, int additionalOffset)
+bool CPU::writeRM16(const RM &rm, uint16_t v)
 {
-    auto mod = modRM >> 6;
-    auto rm = modRM & 7;
-
-    if(mod != 3)
+    if(rm.isReg())
     {
-        auto [offset, segment] = getEffectiveAddress(mod, rm, rw, addr);
-        if(segment == Reg16::AX)
-            return false;
-        return writeMem16(offset + additionalOffset, segment, v);
+        reg(rm.rmBase16()) = v;
+        return true;
     }
     else
-        reg(static_cast<Reg16>(rm)) = v;
-
-    return true;
+        return writeMem16(rm.offset, rm.rmBase, v);
 }
 
-bool CPU::writeRM32(uint8_t modRM, uint32_t v, uint32_t addr, bool rw, int additionalOffset)
+bool CPU::writeRM32(const RM &rm, uint32_t v)
 {
-    auto mod = modRM >> 6;
-    auto rm = modRM & 7;
-
-    if(mod != 3)
+    if(rm.isReg())
     {
-        auto [offset, segment] = getEffectiveAddress(mod, rm, rw, addr);
-        if(segment == Reg16::AX)
-            return false;
-        return writeMem32(offset + additionalOffset, segment, v);
+        reg(rm.rmBase32()) = v;
+        return true;
     }
     else
-        reg(static_cast<Reg32>(rm)) = v;
-
-    return true;
+        return writeMem32(rm.offset, rm.rmBase, v);
 }
 
 template <CPU::ALUOp8 op, bool d>
 void CPU::doALU8(uint32_t addr)
 {
-    uint8_t modRM;
-    if(!readMemIP8(addr + 1, modRM))
+    auto rm = readModRM(addr + 1);
+    if(!rm.isValid())
         return;
 
-    auto r = static_cast<Reg8>((modRM >> 3) & 0x7);
     reg(Reg32::EIP)++;
 
     uint8_t src, dest;
 
     if(d)
     {
-        if(!readRM8(modRM, src, addr))
+        if(!readRM8(rm, src))
             return;
 
-        dest = reg(r);
+        dest = reg(rm.reg8());
 
-        reg(r) = op(dest, src, flags);
+        reg(rm.reg8()) = op(dest, src, flags);
     }
     else
     {
-        src = reg(r);
+        src = reg(rm.reg8());
 
-        if(!readRM8(modRM, dest, addr))
+        if(!readRM8(rm, dest))
             return;
 
-        writeRM8(modRM, op(dest, src, flags), addr, true);
+        writeRM8(rm, op(dest, src, flags));
     }
 }
 
 template <CPU::ALUOp16 op, bool d>
 void CPU::doALU16(uint32_t addr)
 {
-    uint8_t modRM;
-    if(!readMemIP8(addr + 1, modRM))
+    auto rm = readModRM(addr + 1);
+    if(!rm.isValid())
         return;
 
-    auto r = static_cast<Reg16>((modRM >> 3) & 0x7);
     reg(Reg32::EIP)++;
 
     uint16_t src, dest;
 
     if(d)
     {
-        if(!readRM16(modRM, src, addr))
+        if(!readRM16(rm, src))
             return;
 
-        dest = reg(r);
+        dest = reg(rm.reg16());
 
-        reg(r) = op(dest, src, flags);
+        reg(rm.reg16()) = op(dest, src, flags);
     }
     else
     {
-        src = reg(r);
+        src = reg(rm.reg16());
 
-        if(!readRM16(modRM, dest, addr))
+        if(!readRM16(rm, dest))
             return;
 
-        writeRM16(modRM, op(dest, src, flags), addr, true);
+        writeRM16(rm, op(dest, src, flags));
     }
 }
 
 template <CPU::ALUOp32 op, bool d>
 void CPU::doALU32(uint32_t addr)
 {
-    uint8_t modRM;
-    if(!readMemIP8(addr + 1, modRM))
+    auto rm = readModRM(addr + 1);
+    if(!rm.isValid())
         return;
 
-    auto r = static_cast<Reg32>((modRM >> 3) & 0x7);
     reg(Reg32::EIP)++;
 
     uint32_t src, dest;
 
     if(d)
     {
-        if(!readRM32(modRM, src, addr))
+        if(!readRM32(rm, src))
             return;
 
-        dest = reg(r);
+        dest = reg(rm.reg32());
 
-        reg(r) = op(dest, src, flags);
+        reg(rm.reg32()) = op(dest, src, flags);
     }
     else
     {
-        src = reg(r);
+        src = reg(rm.reg32());
 
-        if(!readRM32(modRM, dest, addr))
+        if(!readRM32(rm, dest))
             return;
 
-        writeRM32(modRM, op(dest, src, flags), addr, true);
+        writeRM32(rm, op(dest, src, flags));
     }
 }
 
@@ -7748,35 +7536,29 @@ void CPU::interruptReturn(bool operandSize32)
 // LES/LDS/...
 void CPU::loadFarPointer(uint32_t addr, Reg16 segmentReg, bool operandSize32)
 {
-    uint8_t modRM;
-    if(!readMemIP8(addr + 1, modRM))
+    auto rm = readModRM(addr + 1);
+    if(!rm.isValid())
         return;
 
-    auto mod = modRM >> 6;
-    auto r = (modRM >> 3) & 0x7;
-    auto rm = modRM & 7;
-
-    assert(mod != 3);
-
-    auto [offset, segment] = getEffectiveAddress(mod, rm, false, addr);
+    assert(!rm.isReg());
 
     if(operandSize32)
     {
         uint32_t v;
         uint16_t segV;
-        if(!readMem32(offset, segment, v) || !readMem16(offset + 4, segment, segV) || !setSegmentReg(segmentReg, segV))
+        if(!readMem32(rm.offset, rm.rmBase, v) || !readMem16(rm.offset + 4, rm.rmBase, segV) || !setSegmentReg(segmentReg, segV))
             return;
 
-        reg(static_cast<Reg32>(r)) = v;
+        reg(rm.reg32()) = v;
     }
     else
     {
         uint16_t v;
         uint16_t segV;
-        if(!readMem16(offset, segment, v) || !readMem16(offset + 2, segment, segV) || !setSegmentReg(segmentReg, segV))
+        if(!readMem16(rm.offset, rm.rmBase, v) || !readMem16(rm.offset + 2, rm.rmBase, segV) || !setSegmentReg(segmentReg, segV))
             return;
 
-        reg(static_cast<Reg16>(r)) = v;
+        reg(rm.reg16()) = v;
     }
     
     reg(Reg32::EIP) += 1;
