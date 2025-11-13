@@ -6031,6 +6031,9 @@ std::tuple<uint32_t, CPU::Reg16> CPU::getEffectiveAddress(int mod, int rm, bool 
                     if(base == Reg32::ESP || base == Reg32::EBP)
                         segBase = Reg16::SS;
                     memAddr = reg(base);
+
+                    if(index == 4) // no index
+                        memAddr <<= scale; // undefined behaviour
                 }
 
                 if(index != 4) // SP means no index
