@@ -5839,175 +5839,6 @@ bool CPU::lookupPageTable(uint32_t virtAddr, uint32_t &physAddr, bool forWrite, 
     return true;
 }
 
-// returns {0, AX(0)} if there was a fault fetching a disp (or SIB)
-std::tuple<uint32_t, CPU::Reg16> CPU::getEffectiveAddress(int mod, int rm, uint32_t &addr)
-{
-    uint32_t memAddr = 0;
-    Reg16 segBase = Reg16::DS;
-
-    addr++; // the R/M
-
-    if(addressSize32) // r/m meaning is entirely different in 32bit mode
-    {
-        // are there more cases we need to use SS?
-        switch(rm)
-        {
-            case 0: // EAX
-            case 1: // ECX 
-            case 2: // EDX
-            case 3: // EBX
-            case 6: // ESI
-            case 7: // EDI
-                memAddr = reg(static_cast<Reg32>(rm));
-                break;
-
-            case 4: // SIB
-            {
-                uint8_t sib;
-                if(!readMemIP8(addr++, sib))
-                    return {0, Reg16::AX};
-
-                reg(Reg32::EIP)++;
-
-                int scale = sib >> 6;
-                int index = (sib >> 3) & 7;
-                auto base = static_cast<Reg32>(sib & 7);
-
-                if(mod == 0 && base == Reg32::EBP)
-                {
-                    // disp32 instead of base
-                    if(!readMemIP32(addr, memAddr))
-                        return {0, Reg16::AX};
-
-                    reg(Reg32::EIP) += 4;
-                    addr += 4;
-                }
-                else
-                {
-                    if(base == Reg32::ESP || base == Reg32::EBP)
-                        segBase = Reg16::SS;
-                    memAddr = reg(base);
-
-                    if(index == 4) // no index
-                        memAddr <<= scale; // undefined behaviour
-                }
-
-                if(index != 4) // SP means no index
-                    memAddr += reg(static_cast<Reg32>(index)) << scale;
-
-                break;
-            }
-            case 5: // ~the same as 6 for 16-bit
-                if(mod == 0) // direct
-                {
-                    if(!readMemIP32(addr, memAddr))
-                        return {0, Reg16::AX};
-
-                    reg(Reg32::EIP) += 4;
-                    addr += 4;
-                }
-                else
-                {
-                    // default to stack segment
-                    memAddr = reg(Reg32::EBP);
-                    segBase = Reg16::SS;
-                }
-                break;
-        }
-    }
-    else
-    {
-        switch(rm)
-        {
-            case 0: // BX + SI
-                memAddr = reg(Reg16::BX) + reg(Reg16::SI);
-                break;
-            case 1: // BX + DI
-                memAddr = reg(Reg16::BX) + reg(Reg16::DI);
-                break;
-            case 2: // BP + SI
-                memAddr = reg(Reg16::BP) + reg(Reg16::SI);
-                segBase = Reg16::SS;
-                break;
-            case 3: // BP + DI
-                memAddr = reg(Reg16::BP) + reg(Reg16::DI);
-                segBase = Reg16::SS;
-                break;
-            case 4:
-                memAddr = reg(Reg16::SI);
-                break;
-            case 5:
-                memAddr = reg(Reg16::DI);
-                break;
-            case 6:
-                if(mod == 0) // direct
-                {
-                    if(!readMemIP16(addr, memAddr))
-                        return {0, Reg16::AX};
-
-                    reg(Reg32::EIP) += 2;
-                    addr += 2;
-                }
-                else
-                {
-                    // default to stack segment
-                    memAddr = reg(Reg16::BP);
-                    segBase = Reg16::SS;
-                }
-                break;
-            case 7:
-                memAddr = reg(Reg16::BX);
-                break;
-        }
-    }
-
-    // add disp
-    if(mod == 1)
-    {
-        int32_t disp;
-        if(!readMemIP8(addr++, disp))
-            return {0, Reg16::AX};
-
-        reg(Reg32::EIP)++;
-
-        memAddr += disp;
-    }
-    else if(mod == 2)
-    {
-        if(addressSize32) // 32bit
-        {
-            uint32_t disp;
-            if(!readMemIP32(addr, disp))
-                return {0, Reg16::AX};
-
-            reg(Reg32::EIP) += 4;
-            addr += 4;
-
-            memAddr += disp;
-        }
-        else //16bit
-        {
-            uint16_t disp;
-            if(!readMemIP16(addr, disp))
-                return {0, Reg16::AX};
-
-            reg(Reg32::EIP) += 2;
-            addr += 2;
-
-            memAddr += disp;
-        }
-    }
-
-    // apply segment override
-    if(segmentOverride != Reg16::AX)
-        segBase = segmentOverride;
-
-    if(!addressSize32)
-        memAddr &= 0xFFFF;
-
-    return {memAddr, segBase};
-}
-
 // reads ModR/M, SIB and displacement, returns reg/offset and address of the next byte after the disp
 // addr is the linear address of the ModR/M byte
 CPU::RM CPU::readModRM(uint32_t addr, uint32_t &endAddr)
@@ -6022,12 +5853,171 @@ CPU::RM CPU::readModRM(uint32_t addr, uint32_t &endAddr)
 
     if(mod != 3)
     {
-        auto [offset, segment] = getEffectiveAddress(mod, rm, addr);
-        if(segment == Reg16::AX) // fault while reading disp
-            return {Reg16::AX, Reg16::IP, 0};
+        uint32_t memAddr = 0;
+        Reg16 segBase = Reg16::DS;
+
+        addr++; // the R/M
+
+        if(addressSize32) // r/m meaning is entirely different in 32bit mode
+        {
+            // are there more cases we need to use SS?
+            switch(rm)
+            {
+                case 0: // EAX
+                case 1: // ECX 
+                case 2: // EDX
+                case 3: // EBX
+                case 6: // ESI
+                case 7: // EDI
+                    memAddr = reg(static_cast<Reg32>(rm));
+                    break;
+
+                case 4: // SIB
+                {
+                    uint8_t sib;
+                    if(!readMemIP8(addr++, sib))
+                        return {Reg16::AX, Reg16::IP, 0};
+
+                    reg(Reg32::EIP)++;
+
+                    int scale = sib >> 6;
+                    int index = (sib >> 3) & 7;
+                    auto base = static_cast<Reg32>(sib & 7);
+
+                    if(mod == 0 && base == Reg32::EBP)
+                    {
+                        // disp32 instead of base
+                        if(!readMemIP32(addr, memAddr))
+                            return {Reg16::AX, Reg16::IP, 0};
+
+                        reg(Reg32::EIP) += 4;
+                        addr += 4;
+                    }
+                    else
+                    {
+                        if(base == Reg32::ESP || base == Reg32::EBP)
+                            segBase = Reg16::SS;
+                        memAddr = reg(base);
+
+                        if(index == 4) // no index
+                            memAddr <<= scale; // undefined behaviour
+                    }
+
+                    if(index != 4) // SP means no index
+                        memAddr += reg(static_cast<Reg32>(index)) << scale;
+
+                    break;
+                }
+                case 5: // ~the same as 6 for 16-bit
+                    if(mod == 0) // direct
+                    {
+                        if(!readMemIP32(addr, memAddr))
+                            return {Reg16::AX, Reg16::IP, 0};
+
+                        reg(Reg32::EIP) += 4;
+                        addr += 4;
+                    }
+                    else
+                    {
+                        // default to stack segment
+                        memAddr = reg(Reg32::EBP);
+                        segBase = Reg16::SS;
+                    }
+                    break;
+            }
+        }
+        else
+        {
+            switch(rm)
+            {
+                case 0: // BX + SI
+                    memAddr = reg(Reg16::BX) + reg(Reg16::SI);
+                    break;
+                case 1: // BX + DI
+                    memAddr = reg(Reg16::BX) + reg(Reg16::DI);
+                    break;
+                case 2: // BP + SI
+                    memAddr = reg(Reg16::BP) + reg(Reg16::SI);
+                    segBase = Reg16::SS;
+                    break;
+                case 3: // BP + DI
+                    memAddr = reg(Reg16::BP) + reg(Reg16::DI);
+                    segBase = Reg16::SS;
+                    break;
+                case 4:
+                    memAddr = reg(Reg16::SI);
+                    break;
+                case 5:
+                    memAddr = reg(Reg16::DI);
+                    break;
+                case 6:
+                    if(mod == 0) // direct
+                    {
+                        if(!readMemIP16(addr, memAddr))
+                            return {Reg16::AX, Reg16::IP, 0};
+
+                        reg(Reg32::EIP) += 2;
+                        addr += 2;
+                    }
+                    else
+                    {
+                        // default to stack segment
+                        memAddr = reg(Reg16::BP);
+                        segBase = Reg16::SS;
+                    }
+                    break;
+                case 7:
+                    memAddr = reg(Reg16::BX);
+                    break;
+            }
+        }
+
+        // add disp
+        if(mod == 1)
+        {
+            int32_t disp;
+            if(!readMemIP8(addr++, disp))
+                return {Reg16::AX, Reg16::IP, 0};
+
+            reg(Reg32::EIP)++;
+
+            memAddr += disp;
+        }
+        else if(mod == 2)
+        {
+            if(addressSize32) // 32bit
+            {
+                uint32_t disp;
+                if(!readMemIP32(addr, disp))
+                    return {Reg16::AX, Reg16::IP, 0};
+
+                reg(Reg32::EIP) += 4;
+                addr += 4;
+
+                memAddr += disp;
+            }
+            else //16bit
+            {
+                uint16_t disp;
+                if(!readMemIP16(addr, disp))
+                    return {Reg16::AX, Reg16::IP, 0};
+
+                reg(Reg32::EIP) += 2;
+                addr += 2;
+
+                memAddr += disp;
+            }
+        }
+
+        // apply segment override
+        if(segmentOverride != Reg16::AX)
+            segBase = segmentOverride;
+
+        if(!addressSize32)
+            memAddr &= 0xFFFF;
 
         endAddr = addr;
-        return {r, segment, offset};
+        return {r, segBase, memAddr};
     }
     else
     {

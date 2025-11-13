@@ -195,8 +195,6 @@ private:
 
     bool lookupPageTable(uint32_t virtAddr, uint32_t &physAddr, bool forWrite, bool user);
 
-    std::tuple<uint32_t, Reg16> getEffectiveAddress(int mod, int rm, uint32_t &addr);
-
     RM readModRM(uint32_t addr, uint32_t &endAddr);
     RM readModRM(uint32_t addr) {uint32_t tmp; return readModRM(addr, tmp);}
 
