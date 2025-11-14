@@ -4665,7 +4665,7 @@ void CPU::executeInstruction0F(uint32_t addr, bool operandSize32, bool lock)
                     entry.tag &= ~Page_Present;
 
                 // also invalidate our special IP cache
-                pcPtrBase = 0;
+                ipPtrBase = 0;
             }
 
             reg(Reg32::EIP) += 2;
@@ -5628,17 +5628,17 @@ bool CPU::writeMem32(uint32_t offset, uint32_t data, bool privileged)
 bool CPU::readMemIP8(uint32_t offset, uint8_t &data)
 {
     // check if we would cross a page boundary (even if not paging)
-    if(pcPtrBase != offset >> 12)
+    if(ipPtrBase != offset >> 12)
     {
         uint32_t physAddr;
         if(!getPhysicalAddress(offset, physAddr))
             return false;
 
-        pcPtr = sys.mapAddress(physAddr) - offset;
-        pcPtrBase = offset >> 12;
+        ipPtr = sys.mapAddress(physAddr) - offset;
+        ipPtrBase = offset >> 12;
     }
 
-    data = pcPtr[offset];
+    data = ipPtr[offset];
     return true;
 }
 
@@ -5668,17 +5668,17 @@ bool CPU::readMemIP16(uint32_t offset, uint16_t &data)
     }
 
     // usual boundary check
-    if(pcPtrBase != offset >> 12)
+    if(ipPtrBase != offset >> 12)
     {
         uint32_t physAddr;
         if(!getPhysicalAddress(offset, physAddr))
             return false;
 
-        pcPtr = sys.mapAddress(physAddr) - offset;
-        pcPtrBase = offset >> 12;
+        ipPtr = sys.mapAddress(physAddr) - offset;
+        ipPtrBase = offset >> 12;
     }
 
-    data = *reinterpret_cast<const uint16_t *>(pcPtr + offset);
+    data = *reinterpret_cast<const uint16_t *>(ipPtr + offset);
     return true;
 }
 
@@ -5711,17 +5711,17 @@ bool CPU::readMemIP32(uint32_t offset, uint32_t &data)
     }
 
     // usual boundary check
-    if(pcPtrBase != offset >> 12)
+    if(ipPtrBase != offset >> 12)
     {
         uint32_t physAddr;
         if(!getPhysicalAddress(offset, physAddr))
             return false;
 
-        pcPtr = sys.mapAddress(physAddr) - offset;
-        pcPtrBase = offset >> 12;
+        ipPtr = sys.mapAddress(physAddr) - offset;
+        ipPtrBase = offset >> 12;
     }
 
-    data = *reinterpret_cast<const uint32_t *>(pcPtr + offset);
+    data = *reinterpret_cast<const uint32_t *>(ipPtr + offset);
     return true;
 }
 
