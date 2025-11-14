@@ -3284,10 +3284,9 @@ void CPU::executeInstruction()
     
             if(imm == 0)
             {
-                flags = (flags & ~Flag_S) | Flag_P | Flag_Z; // as if remainder was 0
+                flags = (flags & ~(Flag_S | Flag_Z)) | Flag_P;
 
-                // fault
-                serviceInterrupt(0);
+                fault(Fault::DE);
             }
             else
             {
