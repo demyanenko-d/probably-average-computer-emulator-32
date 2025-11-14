@@ -43,6 +43,34 @@
 #define SD_DAT1   20
 #define SD_DAT2   21
 
+#elif defined(EXTRA_BOARD_SD28)
+
+#define AUDIO_I2S_PIO 0
+#define AUDIO_I2S_MUTE_PIN 25
+#define AUDIO_I2S_DATA_PIN 26
+#define AUDIO_I2S_CLOCK_PIN_BASE 27
+
+#define DISPLAY_WIDTH  320
+#define DISPLAY_HEIGHT 240
+
+#define DBI_8BIT
+#define LCD_CS_PIN 2
+#define LCD_DC_PIN 3
+#define LCD_SCK_PIN 6 // WR
+#define LCD_RD_PIN 7
+#define LCD_MOSI_PIN 9 // D0
+#define LCD_RESET_PIN 21
+#define LCD_BACKLIGHT_PIN 23
+#define LCD_VSYNC_PIN 22
+
+#define LCD_MAX_CLOCK 15000000
+#define LCD_ROTATION 270
+
+#define SD_SCK  18
+#define SD_MOSI 19
+#define SD_MISO 20
+#define SD_CS   17
+
 // so far the only self-contained board
 #elif defined(ADAFRUIT_FRUIT_JAM)
 

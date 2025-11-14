@@ -32,6 +32,12 @@ if(EXTRA_BOARD STREQUAL "stamp_carrier")
     set(DISPLAY_DRIVER "hstx")
 endif()
 
+# "Stamp Display 2.8"
+if(EXTRA_BOARD STREQUAL "sd28")
+    set(AUDIO_DRIVER "i2s")
+    set(DISPLAY_DRIVER "dbi")
+endif()
+
 if(EXTRA_BOARD STREQUAL "vgaboard")
     set(AUDIO_DRIVER "i2s")
     set(DISPLAY_DRIVER "dpi")
