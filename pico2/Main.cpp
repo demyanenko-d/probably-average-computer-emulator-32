@@ -221,13 +221,12 @@ static void setDiskLED(bool on)
 
 int main()
 {
-    set_sys_clock_khz(250000, false);
+    // PIO USB wants a multiple of 12, HSTX wants a multiple of ~125 (25.175 * 10 / 2)
+    set_sys_clock_khz(252000, false);
 
 // with all the display handling here, there isn't enough CPU time on core0 for PIO USB
 // also adjust the clock a bit
-#ifdef PIO_USB_HOST
-    set_sys_clock_khz(252000, true); // multiple of 12
-#else
+#ifndef PIO_USB_HOST
     tusb_rhport_init_t hostInit = {
         .role = TUSB_ROLE_HOST,
         .speed = TUSB_SPEED_AUTO

@@ -68,7 +68,7 @@ enum ST7701Reg {
 
 // mode (default to 640x480)
 #ifndef DPI_MODE_CLOCK
-#define DPI_MODE_CLOCK 25000000
+#define DPI_MODE_CLOCK 25200000
 #endif
 
 #ifndef DPI_MODE_H_SYNC_POLARITY
